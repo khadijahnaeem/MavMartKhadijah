@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList // NEW
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +23,70 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 private enum class HomeTab { Listings, MyListings, Profile, Cart }
+
+/* ================== Cart data + repository ================== */ // NEW
+
+// NEW
+private data class CartItem(
+    val id: Long,
+    val listing: Listing,
+    var quantity: Int
+)
+
+// NEW
+private object CartRepository {
+    private val carts = mutableMapOf<Long, SnapshotStateList<CartItem>>()
+    private var nextId = 1L
+
+    private fun cartFor(userId: Long): SnapshotStateList<CartItem> {
+        return carts.getOrPut(userId) { mutableStateListOf() }
+    }
+
+    fun getItems(userId: Long): SnapshotStateList<CartItem> = cartFor(userId)
+
+    fun add(userId: Long, listing: Listing, qty: Int = 1) {
+        val cart = cartFor(userId)
+        val existing = cart.firstOrNull { it.listing.id == listing.id }
+        if (existing != null) {
+            existing.quantity += qty.coerceAtLeast(1)
+            val idx = cart.indexOf(existing)
+            if (idx >= 0) cart[idx] = cart[idx] // nudge for recomposition
+        } else {
+            cart.add(
+                CartItem(
+                    id = nextId++,
+                    listing = listing,
+                    quantity = qty.coerceAtLeast(1)
+                )
+            )
+        }
+    }
+
+    fun updateQuantity(userId: Long, cartItemId: Long, quantity: Int) {
+        val cart = cartFor(userId)
+        val idx = cart.indexOfFirst { it.id == cartItemId }
+        if (idx >= 0) {
+            if (quantity <= 0) {
+                cart.removeAt(idx)
+            } else {
+                cart[idx] = cart[idx].copy(quantity = quantity)
+            }
+        }
+    }
+
+    fun remove(userId: Long, cartItemId: Long) {
+        val cart = cartFor(userId)
+        cart.removeAll { it.id == cartItemId }
+    }
+
+    fun clear(userId: Long) {
+        cartFor(userId).clear()
+    }
+
+    fun totalCents(userId: Long): Int {
+        return cartFor(userId).sumOf { it.listing.priceCents * it.quantity }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,14 +204,31 @@ fun HomeScreen(
                 .background(background)
         ) {
             when (tab) {
-                HomeTab.Listings,
-                HomeTab.MyListings -> ListingsFeed(items, brandPrimary)
+                HomeTab.Listings -> {
+                    ListingsFeed( // CHANGED
+                        listings = items,
+                        brandPrimary = brandPrimary,
+                        showAddToCart = true, // NEW
+                        onAddToCart = { listing -> CartRepository.add(currentUserId, listing, 1) } // NEW
+                    )
+                }
+                HomeTab.MyListings -> {
+                    ListingsFeed( // CHANGED
+                        listings = items,
+                        brandPrimary = brandPrimary,
+                        showAddToCart = false, // NEW
+                        onAddToCart = {} // NEW
+                    )
+                }
 
                 HomeTab.Profile -> ProfileScreen(currentUserId, brandPrimary, background)
+
                 HomeTab.Cart -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Cart (coming soon)", color = Color.Black)
-                    }
+                    CartScreen( // NEW
+                        currentUserId = currentUserId,
+                        brandPrimary = brandPrimary,
+                        background = background
+                    )
                 }
             }
         }
@@ -337,8 +419,14 @@ private fun EditProfileDialog(
 
 /* ================== Listings feed ================== */
 
+// CHANGED signature: added showAddToCart and onAddToCart
 @Composable
-private fun ListingsFeed(listings: List<Listing>, brandPrimary: Color) {
+private fun ListingsFeed(
+    listings: List<Listing>,
+    brandPrimary: Color,
+    showAddToCart: Boolean,                 // NEW
+    onAddToCart: (Listing) -> Unit          // NEW
+) {
     if (listings.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No listings yet.", color = Color.Black)
@@ -369,19 +457,154 @@ private fun ListingsFeed(listings: List<Listing>, brandPrimary: Color) {
                             Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.Black)
                         }
 
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(12.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 formatCents(item.priceCents),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = brandPrimary
                             )
+
+                            if (showAddToCart) {
+                                Button( // NEW
+                                    onClick = { onAddToCart(item) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = brandPrimary,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("ADD TO CART")
+                                }
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/* ================== Cart screen ================== */ // NEW
+
+// NEW
+@Composable
+private fun CartScreen(
+    currentUserId: Long,
+    brandPrimary: Color = Color(0xFF0A2647),
+    background: Color = Color(0xFFF8F9FA)
+) {
+    val cartItems = remember(currentUserId) { CartRepository.getItems(currentUserId) }
+    val totalCents = cartItems.sumOf { it.listing.priceCents * it.quantity }
+
+    if (cartItems.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Your cart is empty.", color = Color.Black)
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(background)
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(cartItems, key = { it.id }) { cartItem ->
+                ElevatedCard(
+                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(cartItem.listing.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(formatCents(cartItem.listing.priceCents), color = Color.Black)
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val newQty = (cartItem.quantity - 1).coerceAtLeast(0)
+                                    CartRepository.updateQuantity(currentUserId, cartItem.id, newQty)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                            ) { Text("-") }
+
+                            Text("${cartItem.quantity}", color = Color.Black, style = MaterialTheme.typography.titleSmall)
+
+                            Button(
+                                onClick = {
+                                    CartRepository.updateQuantity(currentUserId, cartItem.id, cartItem.quantity + 1)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                            ) { Text("+") }
+
+                            IconButton(
+                                onClick = { CartRepository.remove(currentUserId, cartItem.id) }
+                            ) {
+                                Icon(Icons.Outlined.ShoppingCart, contentDescription = "Remove")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Surface(
+            tonalElevation = 3.dp,
+            shadowElevation = 3.dp,
+            color = Color.White
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Total", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text(formatCents(totalCents), color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = { CartRepository.clear(currentUserId) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                    ) { Text("CLEAR") }
+
+                    Button(
+                        onClick = {
+                            // Placeholder checkout action.
+                            CartRepository.clear(currentUserId)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                    ) { Text("CHECK OUT") }
                 }
             }
         }
