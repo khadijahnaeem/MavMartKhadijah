@@ -1,10 +1,14 @@
 package com.example.mavmart
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Add
@@ -13,29 +17,101 @@ import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 
 private enum class HomeTab { Listings, MyListings, Profile, Cart }
+
+/* ================== Cart data + repository ================== */
+private data class CartItem(
+    val id: Long,
+    val listing: Listing,
+    var quantity: Int
+)
+
+private object CartRepository {
+    private val carts = mutableMapOf<Long, SnapshotStateList<CartItem>>()
+    private var nextId = 1L
+
+    private fun cartFor(userId: Long): SnapshotStateList<CartItem> {
+        return carts.getOrPut(userId) { mutableStateListOf() }
+    }
+
+    fun getItems(userId: Long): SnapshotStateList<CartItem> = cartFor(userId)
+
+    fun add(userId: Long, listing: Listing, qty: Int = 1) {
+        val cart = cartFor(userId)
+        val existing = cart.firstOrNull { it.listing.id == listing.id }
+        if (existing != null) {
+            existing.quantity += qty.coerceAtLeast(1)
+            val idx = cart.indexOf(existing)
+            if (idx >= 0) cart[idx] = cart[idx] // nudge for recomposition
+        } else {
+            cart.add(
+                CartItem(
+                    id = nextId++,
+                    listing = listing,
+                    quantity = qty.coerceAtLeast(1)
+                )
+            )
+        }
+    }
+
+    fun updateQuantity(userId: Long, cartItemId: Long, quantity: Int) {
+        val cart = cartFor(userId)
+        val idx = cart.indexOfFirst { it.id == cartItemId }
+        if (idx >= 0) {
+            if (quantity <= 0) {
+                cart.removeAt(idx)
+            } else {
+                cart[idx] = cart[idx].copy(quantity = quantity)
+            }
+        }
+    }
+
+    fun remove(userId: Long, cartItemId: Long) {
+        val cart = cartFor(userId)
+        cart.removeAll { it.id == cartItemId }
+    }
+
+    fun clear(userId: Long) {
+        cartFor(userId).clear()
+    }
+
+    fun totalCents(userId: Long): Int {
+        return cartFor(userId).sumOf { it.listing.priceCents * it.quantity }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     currentUserId: Long,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenListing: (Long) -> Unit
 ) {
     val brandPrimary = Color(0xFF0A2647)
-    var tab by remember { mutableStateOf(HomeTab.Listings) }   // Start on “Listings”
+    val background   = Color(0xFFF8F9FA)
+
+    var tab by remember { mutableStateOf(HomeTab.Listings) }
     var showCreate by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
     var items by remember { mutableStateOf(emptyList<Listing>()) }
+
+    // Snackbar host + scope for "Added to cart"
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Load listings for the active tab
     LaunchedEffect(tab, currentUserId) {
@@ -60,70 +136,120 @@ fun HomeScreen(
                         color = brandPrimary
                     )
                 },
-                actions = { TextButton(onClick = onLogout) { Text("Logout", color = brandPrimary) } },
+                actions = {
+                    // Only show logout button on profile screen
+                    if (tab == HomeTab.Profile) {
+                        TextButton(
+                            onClick = onLogout,
+                            colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                        ) { Text("Logout") }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
         bottomBar = {
             Box {
-                NavigationBar {
+                NavigationBar(containerColor = Color.White) {
                     NavigationBarItem(
                         selected = tab == HomeTab.Listings,
                         onClick = { tab = HomeTab.Listings },
                         icon = { Icon(Icons.AutoMirrored.Outlined.ViewList, contentDescription = "Listings") },
-                        label = { Text("Listings") }
+                        label = { Text("Listings") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = brandPrimary,
+                            selectedTextColor = brandPrimary
+                        )
                     )
                     NavigationBarItem(
                         selected = tab == HomeTab.MyListings,
                         onClick = { tab = HomeTab.MyListings },
-                        icon = { Icon(Icons.AutoMirrored.Outlined.List,     contentDescription = "My Listings") },
-                        label = { Text("My Listings") }
+                        icon = { Icon(Icons.AutoMirrored.Outlined.List, contentDescription = "My Listings") },
+                        label = { Text("My Listings") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = brandPrimary,
+                            selectedTextColor = brandPrimary
+                        )
                     )
 
-                    Spacer(Modifier.weight(1f)) // center gap for FAB
+                    Spacer(Modifier.weight(1f))
 
                     NavigationBarItem(
                         selected = tab == HomeTab.Profile,
                         onClick = { tab = HomeTab.Profile },
                         icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
-                        label = { Text("Profile") }
+                        label = { Text("Profile") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = brandPrimary,
+                            selectedTextColor = brandPrimary
+                        )
                     )
                     NavigationBarItem(
                         selected = tab == HomeTab.Cart,
                         onClick = { tab = HomeTab.Cart },
                         icon = { Icon(Icons.Outlined.ShoppingCart, contentDescription = "Cart") },
-                        label = { Text("Cart") }
+                        label = { Text("Cart") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = brandPrimary,
+                            selectedTextColor = brandPrimary
+                        )
                     )
                 }
 
-                // Centered FAB docked over the bar for listing tabs
                 if (tab == HomeTab.Listings || tab == HomeTab.MyListings) {
                     FloatingActionButton(
                         onClick = { showCreate = true },
-                        modifier = Modifier.align(Alignment.TopCenter)
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = brandPrimary,
+                        contentColor = Color.White
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = "Create Listing")
                     }
                 }
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) } // <-- SHOW SNACKBARS
     ) { inner ->
-        Box(Modifier.padding(inner).fillMaxSize()) {
+        Box(
+            Modifier
+                .padding(inner)
+                .fillMaxSize()
+                .background(background)
+        ) {
             when (tab) {
-                HomeTab.Listings,
-                HomeTab.MyListings -> ListingsFeed(items, brandPrimary)
-
-                HomeTab.Profile -> ProfileScreen(currentUserId)
+                HomeTab.Listings -> {
+                    ListingsFeed(
+                        listings = items,
+                        brandPrimary = brandPrimary,
+                        showAddToCart = true,
+                        onAddToCart = { listing ->
+                            CartRepository.add(currentUserId, listing, 1)
+                            scope.launch { snackbarHostState.showSnackbar("Added to cart", withDismissAction = true) }
+                        },
+                        onOpenListing = onOpenListing
+                    )
+                }
+                HomeTab.MyListings -> {
+                    ListingsFeed(
+                        listings = items,
+                        brandPrimary = brandPrimary,
+                        showAddToCart = false,
+                        onAddToCart = {},
+                        onOpenListing = onOpenListing
+                    )
+                }
+                HomeTab.Profile -> ProfileScreen(currentUserId, brandPrimary, background)
                 HomeTab.Cart -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Cart (coming soon)", color = Color.Black)
-                    }
+                    CartScreen(
+                        currentUserId = currentUserId,
+                        brandPrimary = brandPrimary,
+                        background = background
+                    )
                 }
             }
         }
     }
 
-    // Create listing dialog (only for listing tabs)
     if (showCreate) {
         AddListingDialog(
             onDismiss = { showCreate = false },
@@ -142,14 +268,14 @@ fun HomeScreen(
                     createdAt = System.currentTimeMillis()
                 )
                 db.insertListing(newListing)
-                // Refresh whichever list we’re on
                 items = if (tab == HomeTab.MyListings) {
                     db.getListingsForSeller(currentUserId)
                 } else {
                     db.getAllListings()
                 }
                 showCreate = false
-            }
+            },
+            brandPrimary = brandPrimary
         )
     }
 }
@@ -158,7 +284,7 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(currentUserId: Long) {
+fun ProfileScreen(currentUserId: Long, brandPrimary: Color = Color(0xFF0A2647), background: Color = Color(0xFFF8F9FA)) {
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
@@ -174,6 +300,7 @@ fun ProfileScreen(currentUserId: Long) {
             modifier = Modifier
                 .padding(inner)
                 .fillMaxSize()
+                .background(background)
                 .padding(20.dp)
         ) {
             if (user == null) {
@@ -183,13 +310,17 @@ fun ProfileScreen(currentUserId: Long) {
             } else {
                 val u = user!!
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("USER ID: ${u.id}",  color = Color.Black, style = MaterialTheme.typography.titleMedium)
-                    Text("NAME: ${u.first} ${u.last}", color = Color.Black, style = MaterialTheme.typography.titleMedium)
-                    Text("EMAIL: ${u.email}", color = Color.Black, style = MaterialTheme.typography.titleMedium)
-                    Text("ROLE: ${u.role.name}", color = Color.Black, style = MaterialTheme.typography.titleMedium)
+                    Text("USER ID: ${u.id}",  color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("NAME: ${u.first} ${u.last}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("EMAIL: ${u.email}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("ROLE: ${u.role.name}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
 
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { showEdit = true }, modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { showEdit = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                    ) {
                         Text("EDIT PROFILE")
                     }
                 }
@@ -202,11 +333,11 @@ fun ProfileScreen(currentUserId: Long) {
             user = user!!,
             onDismiss = { showEdit = false },
             onSave = { updated ->
-                // use the db captured from the composable scope
                 db.updateUser(updated)
                 user = db.getUserById(currentUserId)
                 showEdit = false
-            }
+            },
+            brandPrimary = brandPrimary
         )
     }
 }
@@ -216,41 +347,62 @@ fun ProfileScreen(currentUserId: Long) {
 private fun EditProfileDialog(
     user: User,
     onDismiss: () -> Unit,
-    onSave: (User) -> Unit
+    onSave: (User) -> Unit,
+    brandPrimary: Color = Color(0xFF0A2647)
 ) {
     var first by remember { mutableStateOf(user.first) }
     var last by remember { mutableStateOf(user.last) }
     var email by remember { mutableStateOf(user.email) }
-    var password by remember { mutableStateOf(user.password) } 
+    var password by remember { mutableStateOf(user.password) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Profile", color = Color.Black) },
+        title = { Text("Edit Profile", color = brandPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = first, onValueChange = { first = it },
-                    label = { Text("First name", color = Color.Black) },
+                    label = { Text("First name") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
                 OutlinedTextField(
                     value = last, onValueChange = { last = it },
-                    label = { Text("Last name", color = Color.Black) },
+                    label = { Text("Last name") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
                 OutlinedTextField(
                     value = email, onValueChange = { email = it },
-                    label = { Text("Email", color = Color.Black) },
+                    label = { Text("Email") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
                 OutlinedTextField(
                     value = password, onValueChange = { password = it },
-                    label = { Text("Password", color = Color.Black) },
+                    label = { Text("Password") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
             }
         },
@@ -266,17 +418,28 @@ private fun EditProfileDialog(
                         )
                     )
                 },
-                enabled = first.isNotBlank() && last.isNotBlank() && email.isNotBlank()
+                enabled = first.isNotBlank() && last.isNotBlank() && email.isNotBlank(),
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
             ) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+            ) { Text("Cancel") }
+        }
     )
 }
 
 /* ================== Listings feed ================== */
-
 @Composable
-private fun ListingsFeed(listings: List<Listing>, brandPrimary: Color) {
+private fun ListingsFeed(
+    listings: List<Listing>,
+    brandPrimary: Color,
+    showAddToCart: Boolean,
+    onAddToCart: (Listing) -> Unit,
+    onOpenListing: (Long) -> Unit
+) {
     if (listings.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No listings yet.", color = Color.Black)
@@ -289,33 +452,284 @@ private fun ListingsFeed(listings: List<Listing>, brandPrimary: Color) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(listings) { item ->
-                ElevatedCard {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 110.dp)
+                        .clickable { onOpenListing(item.id) },
+                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 110.dp)
                             .padding(16.dp)
                     ) {
-                        Text(item.title, style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                        Text(item.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
 
                         item.description?.takeIf { it.isNotBlank() }?.let {
                             Spacer(Modifier.height(6.dp))
                             Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.Black)
                         }
 
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(12.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 formatCents(item.priceCents),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = brandPrimary
                             )
+
+                            if (showAddToCart) {
+                                Button(
+                                    onClick = { onAddToCart(item) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = brandPrimary,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("ADD TO CART")
+                                }
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/* ============ Listing details screen ============ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ListingDetailsScreen(
+    currentUserId: Long,
+    listingId: Long,
+    onBack: () -> Unit
+) {
+    val brandPrimary = Color(0xFF0A2647)
+    val context = LocalContext.current
+    val db = remember { AppDatabase.get(context) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    var listing by remember { mutableStateOf<Listing?>(null) }
+    var seller  by remember { mutableStateOf<User?>(null) }
+
+    LaunchedEffect(listingId) {
+        val l = db.getListingById(listingId)
+        listing = l
+        seller  = l?.let { db.getUserById(it.sellerId) }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Listing Details", color = brandPrimary) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = brandPrimary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        },
+        bottomBar = {
+            val l = listing
+            if (l != null) {
+                Button(
+                    onClick = {
+                        CartRepository.add(currentUserId, l, 1)
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Added to cart", withDismissAction = true)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    shape = MaterialTheme.shapes.medium
+                ) { Text("Add to cart") }
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { inner ->
+        val l = listing
+        if (l == null) {
+            Box(Modifier.padding(inner).fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .padding(inner)
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Photos
+                if (l.photos.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(l.photos.size) { i ->
+                            AsyncImage(
+                                model = l.photos[i],
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(MaterialTheme.shapes.medium)
+                            )
+                        }
+                    }
+                }
+
+                // Title and price
+                Text(l.title, style = MaterialTheme.typography.headlineSmall, color = Color.Black)
+                Text(formatCents(l.priceCents), style = MaterialTheme.typography.titleMedium, color = Color.Black)
+
+                // Category and condition
+                Text("Category: ${l.category.label}", color = Color.Black)
+                Text("Condition: ${l.condition.label}", color = Color.Black)
+
+                // Seller
+                val sellerName = seller?.let { "${it.first} ${it.last}" } ?: "Unknown"
+                Text("Seller: $sellerName", color = Color.Black)
+
+                // Description
+                l.description?.takeIf { it.isNotBlank() }?.let {
+                    Divider()
+                    Text(it, style = MaterialTheme.typography.bodyLarge, color = Color.Black)
+                }
+            }
+        }
+    }
+}
+
+/* ================== Cart screen ================== */
+
+@Composable
+private fun CartScreen(
+    currentUserId: Long,
+    brandPrimary: Color = Color(0xFF0A2647),
+    background: Color = Color(0xFFF8F9FA)
+) {
+    val cartItems = remember(currentUserId) { CartRepository.getItems(currentUserId) }
+    val totalCents = cartItems.sumOf { it.listing.priceCents * it.quantity }
+
+    if (cartItems.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Your cart is empty.", color = Color.Black)
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(background)
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(cartItems, key = { it.id }) { cartItem ->
+                ElevatedCard(
+                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(cartItem.listing.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(formatCents(cartItem.listing.priceCents), color = Color.Black)
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val newQty = (cartItem.quantity - 1).coerceAtLeast(0)
+                                    CartRepository.updateQuantity(currentUserId, cartItem.id, newQty)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                            ) { Text("-") }
+
+                            Text("${cartItem.quantity}", color = Color.Black, style = MaterialTheme.typography.titleSmall)
+
+                            Button(
+                                onClick = {
+                                    CartRepository.updateQuantity(currentUserId, cartItem.id, cartItem.quantity + 1)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                            ) { Text("+") }
+
+                            IconButton(
+                                onClick = { CartRepository.remove(currentUserId, cartItem.id) }
+                            ) {
+                                Icon(Icons.Outlined.ShoppingCart, contentDescription = "Remove")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Surface(
+            tonalElevation = 3.dp,
+            shadowElevation = 3.dp,
+            color = Color.White
+        ) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Total", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text(formatCents(totalCents), color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = { CartRepository.clear(currentUserId) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                    ) { Text("CLEAR") }
+
+                    Button(
+                        onClick = {
+                            // Placeholder checkout action.
+                            CartRepository.clear(currentUserId)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                    ) { Text("CHECK OUT") }
                 }
             }
         }
@@ -334,7 +748,8 @@ private fun AddListingDialog(
         category: ListingCategory,
         priceDollars: String,
         condition: ItemCondition
-    ) -> Unit
+    ) -> Unit,
+    brandPrimary: Color = Color(0xFF0A2647)
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -345,60 +760,86 @@ private fun AddListingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Listing", color = Color.Black) },
+        title = { Text("Create Listing", color = brandPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
-                    label = { Text("Title", color = Color.Black) },
+                    label = { Text("Title") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
-                    label = { Text("Description (optional)", color = Color.Black) },
+                    label = { Text("Description (optional)") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
 
-                CategoryPicker(value = category, onChange = { category = it })
-                ConditionPicker(value = condition, onChange = { condition = it })
+                CategoryPicker(value = category, onChange = { category = it }, brandPrimary = brandPrimary)
+                ConditionPicker(value = condition, onChange = { condition = it }, brandPrimary = brandPrimary)
 
                 OutlinedTextField(
                     value = price, onValueChange = { price = it },
-                    label = { Text("Price (e.g., 12.34)", color = Color.Black) },
+                    label = { Text("Price (e.g., 12.34)") },
                     textStyle = LocalTextStyle.current.copy(color = Color.Black),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
                 )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onSave(title, description, category, price, condition) },
-                enabled = title.isNotBlank() && price.isNotBlank()
+                enabled = title.isNotBlank() && price.isNotBlank(),
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
             ) { Text("Save") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+            ) { Text("Cancel") }
+        }
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -> Unit) {
+private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -> Unit, brandPrimary: Color = Color(0xFF0A2647)) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = value.label, 
+            value = value.label,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Category", color = Color.Black) },
+            label = { Text("Category") },
             textStyle = LocalTextStyle.current.copy(color = Color.Black),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = brandPrimary,
+                focusedLabelColor = brandPrimary,
+                unfocusedBorderColor = Color.LightGray
+            )
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ListingCategory.entries.forEach  { opt ->
@@ -413,19 +854,24 @@ private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> Unit) {
+private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> Unit, brandPrimary: Color = Color(0xFF0A2647)) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = value.label, 
+            value = value.label,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Condition", color = Color.Black) },
+            label = { Text("Condition") },
             textStyle = LocalTextStyle.current.copy(color = Color.Black),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = brandPrimary,
+                focusedLabelColor = brandPrimary,
+                unfocusedBorderColor = Color.LightGray
+            )
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ItemCondition.entries.forEach { opt ->
@@ -438,11 +884,9 @@ private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> U
     }
 }
 
-/* ================ helper ================ */
-
+/* Money formatter */
 private fun formatCents(cents: Int): String {
     val dollars = cents / 100
     val pennies = cents % 100
     return "$$dollars.${pennies.toString().padStart(2, '0')}"
-
 }

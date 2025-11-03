@@ -271,6 +271,43 @@ class AppDatabase private constructor(ctx: Context) :
         }
         return out
     }
+
+    fun getListingById(id: Long): Listing? {
+        val c = readableDatabase.query(
+            Db.Listings.TABLE,
+            arrayOf(
+                Db.Listings.COL_ID,
+                Db.Listings.COL_SELLER_ID,
+                Db.Listings.COL_TITLE,
+                Db.Listings.COL_DESC,
+                Db.Listings.COL_CATEGORY,
+                Db.Listings.COL_PRICE_CENTS,
+                Db.Listings.COL_CONDITION,
+                Db.Listings.COL_PHOTOS_JSON,
+                Db.Listings.COL_STATUS,
+                Db.Listings.COL_CREATED_AT
+            ),
+            "${Db.Listings.COL_ID}=?",
+            arrayOf(id.toString()),
+            null, null, null
+        )
+        c.use {
+            return if (it.moveToFirst()) {
+                Listing(
+                    id = it.getLong(0),
+                    sellerId = it.getLong(1),
+                    title = it.getString(2),
+                    description = it.getString(3),
+                    category = ListingCategory.valueOf(it.getString(4)),
+                    priceCents = it.getInt(5),
+                    condition = ItemCondition.valueOf(it.getString(6)),
+                    photos = jsonToPhotos(it.getString(7)),
+                    status = ListingStatus.valueOf(it.getString(8)),
+                    createdAt = it.getLong(9)
+                )
+            } else null
+        }
+    }
 }
 
 /* ===========================================================
@@ -302,7 +339,8 @@ private object Db {
             )
         """.trimIndent()
 
-        const val CREATE_INDEX_EMAIL = "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON $TABLE($COL_EMAIL)"
+        const val CREATE_INDEX_EMAIL =
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON $TABLE($COL_EMAIL)"
     }
 
     object Listings {
@@ -335,6 +373,7 @@ private object Db {
             )
         """.trimIndent()
 
-        const val CREATE_INDEX_SELLER = "CREATE INDEX IF NOT EXISTS idx_listings_seller ON $TABLE($COL_SELLER_ID)"
+        const val CREATE_INDEX_SELLER =
+            "CREATE INDEX IF NOT EXISTS idx_listings_seller ON $TABLE($COL_SELLER_ID)"
     }
 }

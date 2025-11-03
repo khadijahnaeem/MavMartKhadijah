@@ -80,7 +80,9 @@ class MainActivity : ComponentActivity() {
                                         popUpTo(nav.graph.startDestinationId) { inclusive = true }
                                         launchSingleTop = true
                                     }
-                                }
+                                },
+                                // pass userId & listingId to details
+                                onOpenListing = { listingId -> nav.navigate("listing/$userId/$listingId") }
                             )
                         }
 
@@ -92,6 +94,23 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 }
+                            )
+                        }
+
+                        // Details route expects both userId and listingId
+                        composable(
+                            route = "listing/{userId}/{listingId}",
+                            arguments = listOf(
+                                navArgument("userId") { type = NavType.LongType },
+                                navArgument("listingId") { type = NavType.LongType }
+                            )
+                        ) { backStackEntry ->
+                            val userId = backStackEntry.arguments?.getLong("userId") ?: 0L
+                            val listingId = backStackEntry.arguments?.getLong("listingId") ?: 0L
+                            ListingDetailsScreen(
+                                currentUserId = userId,
+                                listingId = listingId,
+                                onBack = { nav.popBackStack() }
                             )
                         }
                     }
