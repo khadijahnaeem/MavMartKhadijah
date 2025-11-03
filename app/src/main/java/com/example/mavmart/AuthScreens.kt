@@ -237,13 +237,13 @@ private fun RoleLoginForm(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(80.dp)
                             .clip(CircleShape)
                             .background(brandOrange),
                         contentAlignment = Alignment.Center
-                    ) { Text("MM", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = brandPrimary) }
+                    ) { Text("MM", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = brandPrimary) }
                     Spacer(Modifier.width(14.dp))
-                    Column { Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                    Column { Text("MavMart", fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
                 }
             }
 
@@ -371,7 +371,10 @@ fun RegisterScreen(
     onBack: () -> Unit
 ) {
     val brandPrimary = Color(0xFF0A2647)
+    val brandOrange  = Color(0xFFFF8C00)
+    val background   = Color(0xFFF8F9FA)
     val outlineColor = Color(0xFFE5E7EB)
+
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
@@ -386,80 +389,160 @@ fun RegisterScreen(
                 title = { Text("Register", color = brandPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = brandPrimary)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = brandPrimary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
         bottomBar = {
-            Button(
-                onClick = {
-                    val user = User(
-                        id = 0L,
-                        first = first.trim(),
-                        last = last.trim(),
-                        email = email.trim().lowercase(),
-                        password = password,
-                        role = Role.User
+            Surface(tonalElevation = 1.dp, shadowElevation = 2.dp, color = Color.Transparent) {
+                Button(
+                    onClick = {
+                        val user = User(
+                            first = first.trim(),
+                            last = last.trim(),
+                            email = email.trim().lowercase(),
+                            password = password,
+                            role = Role.User
+                        )
+                        db.insertUser(user)
+                        onBack()
+                    },
+                    enabled = first.isNotBlank() && last.isNotBlank() &&
+                            email.isNotBlank() && password.isNotEmpty(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(16.dp)
+                        .heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White
                     )
-                    db.insertUser(user)
-                    onBack()
-                },
-                enabled = first.isNotBlank() && last.isNotBlank() &&
-                        email.isNotBlank() && password.isNotEmpty(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .navigationBarsPadding(),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
-            ) { Text("Create Account") }
+                ) { Text("Create Account") }
+            }
         }
     ) { inner ->
         Column(
             modifier = Modifier
                 .padding(inner)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .fillMaxSize()
+                .background(background)
         ) {
-            OutlinedTextField(
-                value = first, onValueChange = { first = it },
-                label = { Text("First Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = brandPrimary, unfocusedBorderColor = outlineColor,
-                    focusedLabelColor = brandPrimary, cursorColor = brandPrimary
-                )
-            )
-            OutlinedTextField(
-                value = last, onValueChange = { last = it },
-                label = { Text("Last Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = brandPrimary, unfocusedBorderColor = outlineColor,
-                    focusedLabelColor = brandPrimary, cursorColor = brandPrimary
-                )
-            )
-            OutlinedTextField(
-                value = email, onValueChange = { email = it },
-                label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = brandPrimary, unfocusedBorderColor = outlineColor,
-                    focusedLabelColor = brandPrimary, cursorColor = brandPrimary
-                )
-            )
-            OutlinedTextField(
-                value = password, onValueChange = { password = it },
-                label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                textStyle = LocalTextStyle.current.copy(color = Color.Black),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = brandPrimary, unfocusedBorderColor = outlineColor,
-                    focusedLabelColor = brandPrimary, cursorColor = brandPrimary
-                )
-            )
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(170.dp),
+                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
+                color = brandPrimary
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(brandOrange),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("MM", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = brandPrimary)
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column { Text("MavMart", fontSize = 40.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Create your account",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = brandPrimary
+                    )
+
+                    OutlinedTextField(
+                        value = first,
+                        onValueChange = { first = it },
+                        label = { Text("First Name") },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = brandPrimary,
+                            unfocusedBorderColor = outlineColor,
+                            focusedLabelColor = brandPrimary,
+                            cursorColor = brandPrimary
+                        )
+                    )
+                    OutlinedTextField(
+                        value = last,
+                        onValueChange = { last = it },
+                        label = { Text("Last Name") },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = brandPrimary,
+                            unfocusedBorderColor = outlineColor,
+                            focusedLabelColor = brandPrimary,
+                            cursorColor = brandPrimary
+                        )
+                    )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = brandPrimary,
+                            unfocusedBorderColor = outlineColor,
+                            focusedLabelColor = brandPrimary,
+                            cursorColor = brandPrimary
+                        )
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = brandPrimary,
+                            unfocusedBorderColor = outlineColor,
+                            focusedLabelColor = brandPrimary,
+                            cursorColor = brandPrimary
+                        )
+                    )
+                }
+            }
+
             Spacer(Modifier.weight(1f))
         }
     }
