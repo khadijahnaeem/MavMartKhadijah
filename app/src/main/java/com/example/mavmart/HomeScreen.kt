@@ -96,7 +96,7 @@ fun HomeScreen(
                     )
                 }
 
-                // Centered FAB “docked” over the bar for listing tabs
+                // Centered FAB docked over the bar for listing tabs
                 if (tab == HomeTab.Listings || tab == HomeTab.MyListings) {
                     FloatingActionButton(
                         onClick = { showCreate = true },
@@ -221,7 +221,7 @@ private fun EditProfileDialog(
     var first by remember { mutableStateOf(user.first) }
     var last by remember { mutableStateOf(user.last) }
     var email by remember { mutableStateOf(user.email) }
-    var password by remember { mutableStateOf(user.password) } // plain text per demo
+    var password by remember { mutableStateOf(user.password) } 
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -390,7 +390,7 @@ private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = value.label, // if you don't have .label, use value.name
+            value = value.label, 
             onValueChange = {},
             readOnly = true,
             label = { Text("Category", color = Color.Black) },
@@ -417,7 +417,7 @@ private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> U
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
-            value = value.label, // if you don't have .label, use prettified value.name
+            value = value.label, 
             onValueChange = {},
             readOnly = true,
             label = { Text("Condition", color = Color.Black) },
@@ -444,4 +444,5 @@ private fun formatCents(cents: Int): String {
     val dollars = cents / 100
     val pennies = cents % 100
     return "$$dollars.${pennies.toString().padStart(2, '0')}"
+
 }
