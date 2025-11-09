@@ -186,7 +186,6 @@ private fun UserDetailDialog(
     onDismiss: () -> Unit,
     onSaveEnabled: (Boolean) -> Unit
 ) {
-    val cs = MaterialTheme.colorScheme
     var enabled by remember { mutableStateOf(user.enabled) }
 
     AlertDialog(
@@ -231,25 +230,6 @@ private fun ListingDetailDialog(
         }
     )
 }
-
-/* -------------------- Helpers -------------------- */
-
-private fun Listing.categoryLabel(): String =
-    when (category) {
-        ListingCategory.GENERAL -> ListingCategory.GENERAL.label
-        ListingCategory.ENGINEERING -> ListingCategory.ENGINEERING.label
-        ListingCategory.PRE_MED -> ListingCategory.PRE_MED.label
-        ListingCategory.HUMANITIES_ART -> ListingCategory.HUMANITIES_ART.label
-    }
-
-private fun Listing.conditionLabel(): String =
-    when (condition) {
-        ItemCondition.NEW -> ItemCondition.NEW.label
-        ItemCondition.LIKE_NEW -> ItemCondition.LIKE_NEW.label
-        ItemCondition.GOOD -> ItemCondition.GOOD.label
-        ItemCondition.FAIR -> ItemCondition.FAIR.label
-        ItemCondition.POOR -> ItemCondition.POOR.label
-    }
 
 private fun formatCents(cents: Int): String {
     val dollars = cents / 100

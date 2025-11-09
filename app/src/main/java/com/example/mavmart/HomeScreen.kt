@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 private enum class HomeTab { Listings, MyListings, Profile, Cart }
 
@@ -104,12 +106,10 @@ fun HomeScreen(
     onToggleTheme: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    val brandPrimary = cs.primary
-    val background = cs.surface
-    val onBackground = cs.onSurface
 
     var tab by remember { mutableStateOf(HomeTab.Listings) }
     var showCreate by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
@@ -138,15 +138,21 @@ fun HomeScreen(
                             HomeTab.Profile    -> "Profile"
                             HomeTab.Cart       -> "Cart"
                         },
-                        color = brandPrimary
+                        color = cs.primary
                     )
                 },
                 actions = {
+                    if (tab == HomeTab.Listings) {
+                        IconButton(onClick = { showSearch = true }) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search")
+                        }
+                        Spacer(Modifier.width(4.dp))
+                    }
+
                     if (tab == HomeTab.Profile) {
-                        // THEME TOGGLE placed between “Profile” (title) and “Logout”
                         TextButton(
                             onClick = onToggleTheme,
-                            colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                            colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
                         ) {
                             Icon(
                                 imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
@@ -160,7 +166,7 @@ fun HomeScreen(
 
                         TextButton(
                             onClick = onLogout,
-                            colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                            colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
                         ) {
                             Text("Logout")
                         }
@@ -178,8 +184,8 @@ fun HomeScreen(
                         icon = { Icon(Icons.AutoMirrored.Outlined.ViewList, contentDescription = "Listings") },
                         label = { Text("Listings") },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = brandPrimary,
-                            selectedTextColor = brandPrimary
+                            selectedIconColor = cs.primary,
+                            selectedTextColor = cs.primary
                         )
                     )
                     NavigationBarItem(
@@ -188,8 +194,8 @@ fun HomeScreen(
                         icon = { Icon(Icons.AutoMirrored.Outlined.List, contentDescription = "My Listings") },
                         label = { Text("My Listings") },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = brandPrimary,
-                            selectedTextColor = brandPrimary
+                            selectedIconColor = cs.primary,
+                            selectedTextColor = cs.primary
                         )
                     )
 
@@ -201,8 +207,8 @@ fun HomeScreen(
                         icon = { Icon(Icons.Outlined.Person, contentDescription = "Profile") },
                         label = { Text("Profile") },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = brandPrimary,
-                            selectedTextColor = brandPrimary
+                            selectedIconColor = cs.primary,
+                            selectedTextColor = cs.primary
                         )
                     )
                     NavigationBarItem(
@@ -211,8 +217,8 @@ fun HomeScreen(
                         icon = { Icon(Icons.Outlined.ShoppingCart, contentDescription = "Cart") },
                         label = { Text("Cart") },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = brandPrimary,
-                            selectedTextColor = brandPrimary
+                            selectedIconColor = cs.primary,
+                            selectedTextColor = cs.primary
                         )
                     )
                 }
@@ -221,7 +227,7 @@ fun HomeScreen(
                     FloatingActionButton(
                         onClick = { showCreate = true },
                         modifier = Modifier.align(Alignment.TopCenter),
-                        containerColor = brandPrimary,
+                        containerColor = cs.primary,
                         contentColor = cs.onPrimary
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = "Create Listing")
@@ -235,14 +241,14 @@ fun HomeScreen(
             Modifier
                 .padding(inner)
                 .fillMaxSize()
-                .background(background)
+                .background(cs.background)
         ) {
             when (tab) {
                 HomeTab.Listings -> {
                     ListingsFeed(
                         listings = items,
-                        brandPrimary = brandPrimary,
                         showAddToCart = true,
+                        currentUserId = currentUserId,
                         onAddToCart = { listing ->
                             CartRepository.add(currentUserId, listing, 1)
                             scope.launch { snackbarHostState.showSnackbar("Added to cart", withDismissAction = true) }
@@ -253,24 +259,19 @@ fun HomeScreen(
                 HomeTab.MyListings -> {
                     ListingsFeed(
                         listings = items,
-                        brandPrimary = brandPrimary,
                         showAddToCart = false,
+                        currentUserId = currentUserId,
                         onAddToCart = {},
                         onOpenListing = onOpenListing
                     )
                 }
-                HomeTab.Profile -> ProfileScreen(
-                    currentUserId = currentUserId,
-                    brandPrimary = brandPrimary,
-                    background = background,
-                    isDark = isDark,
-                    onToggleTheme = onToggleTheme
-                )
+                HomeTab.Profile ->
+                    ProfileScreen(
+                        currentUserId = currentUserId
+                    )
                 HomeTab.Cart -> {
                     CartScreen(
-                        currentUserId = currentUserId,
-                        brandPrimary = brandPrimary,
-                        background = background
+                        currentUserId = currentUserId
                     )
                 }
             }
@@ -301,9 +302,205 @@ fun HomeScreen(
                     db.getAllListings()
                 }
                 showCreate = false
-            },
-            brandPrimary = brandPrimary
+            }
         )
+    }
+
+    if (showSearch) {
+        SearchScreen(
+            items = items,
+            onClose = { showSearch = false },
+            onOpenListing = { id ->
+                showSearch = false
+                onOpenListing(id)
+            }
+        )
+    }
+}
+
+/* =============== Search screen =============== */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchScreen(
+    items: List<Listing>,
+    onClose: () -> Unit,
+    onOpenListing: (Long) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    var query by remember { mutableStateOf("") }
+    var showFilters by remember { mutableStateOf(false) }
+    val categories = ListingCategory.entries
+    var selectedCategories by remember { mutableStateOf(setOf<ListingCategory>()) }
+
+    // ----- Price bounds from items -----
+    val (minCents, maxCents) = remember(items) {
+        val prices = items.map { it.priceCents }
+        val min = prices.minOrNull() ?: 0
+        val max = prices.maxOrNull() ?: 0
+        min to max
+    }
+    val safeMin = minCents
+    val safeMax = if (maxCents <= minCents) minCents + 100 else maxCents
+
+    // Slider in dollars for UI, keep cents for filtering
+    val initialRange = remember(safeMin, safeMax) {
+        (safeMin / 100f)..(safeMax / 100f)
+    }
+    var priceRange by remember(safeMin, safeMax) { mutableStateOf(initialRange) }
+
+    fun inPriceRange(priceCents: Int): Boolean {
+        val minSel = (priceRange.start * 100).toInt()
+        val maxSel = (priceRange.endInclusive * 100).toInt()
+        return priceCents in minSel..maxSel
+    }
+
+    val filtered = remember(query, selectedCategories, items, priceRange) {
+        items.filter { listing ->
+            val matchesQuery = query.isBlank() ||
+                    listing.title.contains(query, ignoreCase = true) ||
+                    (listing.description?.contains(query, ignoreCase = true) ?: false)
+            val matchesCategory =
+                selectedCategories.isEmpty() || selectedCategories.contains(listing.category)
+            val matchesPrice = inPriceRange(listing.priceCents)
+            matchesQuery && matchesCategory && matchesPrice
+        }
+    }
+
+    Surface(Modifier.fillMaxSize(), color = cs.surface) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Search Listings", color = cs.primary) },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = cs.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            }
+        ) { inner ->
+            Column(
+                modifier = Modifier
+                    .padding(inner)
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Search listings…") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary
+                    ),
+                    trailingIcon = {
+                        TextButton(onClick = { showFilters = !showFilters }) {
+                            Text(if (showFilters) "Hide Filters" else "Filters", color = cs.primary)
+                        }
+                    }
+                )
+
+                if (showFilters) {
+                    Spacer(Modifier.height(8.dp))
+                    ElevatedCard(
+                        colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // ----- Categories -----
+                            Text("Filter by Category", color = cs.primary, style = MaterialTheme.typography.titleSmall)
+                            categories.forEach { cat ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = selectedCategories.contains(cat),
+                                        onCheckedChange = { checked ->
+                                            selectedCategories =
+                                                if (checked) selectedCategories + cat else selectedCategories - cat
+                                        }
+                                    )
+                                    Text(cat.label, color = cs.onSurface)
+                                }
+                            }
+
+                            HorizontalDivider()
+
+                            // ----- Price Range -----
+                            Text("Price Range", color = cs.primary, style = MaterialTheme.typography.titleSmall)
+
+                            // Labels row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("$" + String.format(Locale.US, "%.2f", priceRange.start), color = cs.onSurface)
+                                Text("$" + String.format(Locale.US, "%.2f", priceRange.endInclusive), color = cs.onSurface)
+                            }
+
+                            // Slider (in dollars)
+                            RangeSlider(
+                                value = priceRange,
+                                onValueChange = { range ->
+                                    val clampedStart = range.start.coerceIn(safeMin / 100f, safeMax / 100f)
+                                    val clampedEnd = range.endInclusive.coerceIn(safeMin / 100f, safeMax / 100f)
+                                    priceRange = clampedStart..clampedEnd
+                                },
+                                valueRange = (safeMin / 100f)..(safeMax / 100f),
+                                steps = 10,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = cs.primary,
+                                    activeTrackColor = cs.primary
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                if (filtered.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No listings found", color = cs.onSurface.copy(alpha = 0.7f))
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(filtered) { item ->
+                            ElevatedCard(
+                                colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
+                                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenListing(item.id) }
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Text(item.title, color = cs.primary, style = MaterialTheme.typography.titleMedium)
+                                    item.description?.takeIf { it.isNotBlank() }?.let {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(it, color = cs.onSurface)
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(formatCents(item.priceCents), color = cs.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -311,13 +508,7 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(
-    currentUserId: Long,
-    brandPrimary: Color = MaterialTheme.colorScheme.primary,
-    background: Color = MaterialTheme.colorScheme.surface,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit
-) {
+fun ProfileScreen(currentUserId: Long) {
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
     val cs = MaterialTheme.colorScheme
@@ -332,7 +523,7 @@ fun ProfileScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(background)
+            .background(cs.background)
             .padding(20.dp)
     ) {
         if (user == null) {
@@ -342,17 +533,17 @@ fun ProfileScreen(
         } else {
             val u = user!!
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("USER ID: ${u.id}",  color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("NAME: ${u.first} ${u.last}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("EMAIL: ${u.email}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                Text("ROLE: ${u.role.name}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                Text("USER ID: ${u.id}",  color = cs.primary, style = MaterialTheme.typography.titleMedium)
+                Text("NAME: ${u.first} ${u.last}", color = cs.primary, style = MaterialTheme.typography.titleMedium)
+                Text("EMAIL: ${u.email}", color = cs.primary, style = MaterialTheme.typography.titleMedium)
+                Text("ROLE: ${u.role.name}", color = cs.primary, style = MaterialTheme.typography.titleMedium)
 
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = { showEdit = true },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = brandPrimary,
+                        containerColor = cs.primary,
                         contentColor = cs.onPrimary
                     )
                 ) { Text("EDIT PROFILE") }
@@ -368,8 +559,7 @@ fun ProfileScreen(
                 db.updateUser(updated)
                 user = db.getUserById(currentUserId)
                 showEdit = false
-            },
-            brandPrimary = brandPrimary
+            }
         )
     }
 }
@@ -379,8 +569,7 @@ fun ProfileScreen(
 private fun EditProfileDialog(
     user: User,
     onDismiss: () -> Unit,
-    onSave: (User) -> Unit,
-    brandPrimary: Color = Color(0xFF0A2647)
+    onSave: (User) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     var first by remember { mutableStateOf(user.first) }
@@ -390,7 +579,7 @@ private fun EditProfileDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Profile", color = brandPrimary) },
+        title = { Text("Edit Profile", color = cs.primary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -399,8 +588,8 @@ private fun EditProfileDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -410,8 +599,8 @@ private fun EditProfileDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -421,8 +610,8 @@ private fun EditProfileDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -432,8 +621,8 @@ private fun EditProfileDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -452,13 +641,13 @@ private fun EditProfileDialog(
                     )
                 },
                 enabled = first.isNotBlank() && last.isNotBlank() && email.isNotBlank(),
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Save") }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Cancel") }
         }
     )
@@ -468,8 +657,8 @@ private fun EditProfileDialog(
 @Composable
 private fun ListingsFeed(
     listings: List<Listing>,
-    brandPrimary: Color,
     showAddToCart: Boolean,
+    currentUserId: Long,
     onAddToCart: (Listing) -> Unit,
     onOpenListing: (Long) -> Unit
 ) {
@@ -501,7 +690,7 @@ private fun ListingsFeed(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
-                        Text(item.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
+                        Text(item.title, style = MaterialTheme.typography.titleMedium, color = cs.primary)
 
                         item.description?.takeIf { it.isNotBlank() }?.let {
                             Spacer(Modifier.height(6.dp))
@@ -518,14 +707,14 @@ private fun ListingsFeed(
                             Text(
                                 formatCents(item.priceCents),
                                 style = MaterialTheme.typography.titleSmall,
-                                color = brandPrimary
+                                color = cs.primary
                             )
 
-                            if (showAddToCart) {
+                            if (showAddToCart && item.sellerId != currentUserId) {
                                 Button(
                                     onClick = { onAddToCart(item) },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = brandPrimary,
+                                        containerColor = cs.primary,
                                         contentColor = cs.onPrimary
                                     )
                                 ) {
@@ -723,11 +912,7 @@ fun ListingDetailsScreen(
 /* ================== Cart screen ================== */
 
 @Composable
-private fun CartScreen(
-    currentUserId: Long,
-    brandPrimary: Color = Color(0xFF0A2647),
-    background: Color = Color(0xFFF8F9FA)
-) {
+private fun CartScreen(currentUserId: Long) {
     val cs = MaterialTheme.colorScheme
     val cartItems = remember(currentUserId) { CartRepository.getItems(currentUserId) }
     val totalCents by remember(cartItems) {
@@ -765,7 +950,7 @@ private fun CartScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(cartItem.listing.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
+                            Text(cartItem.listing.title, style = MaterialTheme.typography.titleMedium, color = cs.primary)
                             Spacer(Modifier.height(4.dp))
                             Text(formatCents(cartItem.listing.priceCents), color = cs.onSurface)
                         }
@@ -780,7 +965,7 @@ private fun CartScreen(
                                     CartRepository.updateQuantity(currentUserId, cartItem.id, newQty)
                                 },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.primary)
                             ) { Text("-") }
 
                             Text("${cartItem.quantity}", color = cs.onSurface, style = MaterialTheme.typography.titleSmall)
@@ -790,7 +975,7 @@ private fun CartScreen(
                                     CartRepository.updateQuantity(currentUserId, cartItem.id, cartItem.quantity + 1)
                                 },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = cs.onPrimary)
+                                colors = ButtonDefaults.buttonColors(containerColor = cs.primary, contentColor = cs.onPrimary)
                             ) { Text("+") }
 
                             IconButton(
@@ -815,8 +1000,8 @@ private fun CartScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Total", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                    Text(formatCents(totalCents), color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                    Text("Total", color = cs.primary, style = MaterialTheme.typography.titleMedium)
+                    Text(formatCents(totalCents), color = cs.primary, style = MaterialTheme.typography.titleMedium)
                 }
 
                 Spacer(Modifier.height(12.dp))
@@ -825,7 +1010,7 @@ private fun CartScreen(
                     OutlinedButton(
                         onClick = { CartRepository.clear(currentUserId) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.primary)
                     ) { Text("CLEAR") }
 
                     Button(
@@ -833,7 +1018,7 @@ private fun CartScreen(
                             CartRepository.clear(currentUserId)
                         },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = cs.onPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = cs.primary, contentColor = cs.onPrimary)
                     ) { Text("CHECK OUT") }
                 }
             }
@@ -853,8 +1038,7 @@ private fun AddListingDialog(
         category: ListingCategory,
         priceDollars: String,
         condition: ItemCondition
-    ) -> Unit,
-    brandPrimary: Color = Color(0xFF0A2647)
+    ) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     var title by remember { mutableStateOf("") }
@@ -866,7 +1050,7 @@ private fun AddListingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Listing", color = brandPrimary) },
+        title = { Text("Create Listing", color = cs.primary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -875,8 +1059,8 @@ private fun AddListingDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -886,14 +1070,14 @@ private fun AddListingDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
 
-                CategoryPicker(value = category, onChange = { category = it }, brandPrimary = brandPrimary)
-                ConditionPicker(value = condition, onChange = { condition = it }, brandPrimary = brandPrimary)
+                CategoryPicker(value = category, onChange = { category = it })
+                ConditionPicker(value = condition, onChange = { condition = it })
 
                 OutlinedTextField(
                     value = price, onValueChange = { price = it },
@@ -903,8 +1087,8 @@ private fun AddListingDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -914,13 +1098,13 @@ private fun AddListingDialog(
             TextButton(
                 onClick = { onSave(title, description, category, price, condition) },
                 enabled = title.isNotBlank() && price.isNotBlank(),
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Save") }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Cancel") }
         }
     )
@@ -931,8 +1115,7 @@ private fun AddListingDialog(
 private fun EditListingDialog(
     listing: Listing,
     onDismiss: () -> Unit,
-    onSave: (Listing) -> Unit,
-    brandPrimary: Color = Color(0xFF0A2647)
+    onSave: (Listing) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     var title by remember { mutableStateOf(listing.title) }
@@ -943,7 +1126,7 @@ private fun EditListingDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit listing", color = brandPrimary) },
+        title = { Text("Edit listing", color = cs.primary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -952,8 +1135,8 @@ private fun EditListingDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -963,14 +1146,14 @@ private fun EditListingDialog(
                     textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
 
-                CategoryPicker(value = category, onChange = { category = it }, brandPrimary = brandPrimary)
-                ConditionPicker(value = condition, onChange = { condition = it }, brandPrimary = brandPrimary)
+                CategoryPicker(value = category, onChange = { category = it })
+                ConditionPicker(value = condition, onChange = { condition = it })
 
                 OutlinedTextField(
                     value = price, onValueChange = { price = it },
@@ -980,8 +1163,8 @@ private fun EditListingDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = brandPrimary,
-                        focusedLabelColor = brandPrimary,
+                        focusedBorderColor = cs.primary,
+                        focusedLabelColor = cs.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -1002,13 +1185,13 @@ private fun EditListingDialog(
                     )
                 },
                 enabled = title.isNotBlank() && price.isNotBlank(),
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Save") }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Cancel") }
         }
     )
@@ -1018,8 +1201,7 @@ private fun EditListingDialog(
 @Composable
 private fun CategoryPicker(
     value: ListingCategory,
-    onChange: (ListingCategory) -> Unit,
-    brandPrimary: Color = Color(0xFF0A2647)
+    onChange: (ListingCategory) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
@@ -1035,8 +1217,8 @@ private fun CategoryPicker(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
                 .fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = brandPrimary,
-                focusedLabelColor = brandPrimary,
+                focusedBorderColor = cs.primary,
+                focusedLabelColor = cs.primary,
                 unfocusedBorderColor = Color.LightGray
             )
         )
@@ -1055,8 +1237,7 @@ private fun CategoryPicker(
 @Composable
 private fun ConditionPicker(
     value: ItemCondition,
-    onChange: (ItemCondition) -> Unit,
-    brandPrimary: Color = Color(0xFF0A2647)
+    onChange: (ItemCondition) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
@@ -1072,8 +1253,8 @@ private fun ConditionPicker(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
                 .fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = brandPrimary,
-                focusedLabelColor = brandPrimary,
+                focusedBorderColor = cs.primary,
+                focusedLabelColor = cs.primary,
                 unfocusedBorderColor = Color.LightGray
             )
         )
