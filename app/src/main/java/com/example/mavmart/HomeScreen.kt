@@ -1,5 +1,7 @@
 package com.example.mavmart
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -281,7 +283,7 @@ fun HomeScreen(
     if (showCreate) {
         AddListingDialog(
             onDismiss = { showCreate = false },
-            onSave = { title, description, category, priceDollars, condition ->
+            onSave = { title, description, category, priceDollars, condition, photos ->
                 val priceCents = (priceDollars.toDoubleOrNull()?.times(100))?.toInt() ?: 0
                 val newListing = Listing(
                     id = 0L,
@@ -291,7 +293,7 @@ fun HomeScreen(
                     category = category,
                     priceCents = priceCents,
                     condition = condition,
-                    photos = emptyList(),
+                    photos = photos,
                     status = ListingStatus.ACTIVE,
                     createdAt = System.currentTimeMillis()
                 )
@@ -1037,7 +1039,8 @@ private fun AddListingDialog(
         description: String,
         category: ListingCategory,
         priceDollars: String,
-        condition: ItemCondition
+        condition: ItemCondition,
+        photos: List<String>
     ) -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1047,6 +1050,14 @@ private fun AddListingDialog(
 
     var category by remember { mutableStateOf(ListingCategory.GENERAL) }
     var condition by remember { mutableStateOf(ItemCondition.GOOD) }
+
+    var selectedPhotos by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        selectedPhotos = uris.map { it.toString() }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1092,11 +1103,36 @@ private fun AddListingDialog(
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
+
+                // Add photos
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { photoPicker.launch("image/*") },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = cs.primary,
+                        contentColor = cs.onPrimary
+                    )
+                ) { Text("Add photos") }
+
+                if (selectedPhotos.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(selectedPhotos) { uri ->
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(MaterialTheme.shapes.medium)
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(title, description, category, price, condition) },
+                onClick = { onSave(title, description, category, price, condition, selectedPhotos) },
                 enabled = title.isNotBlank() && price.isNotBlank(),
                 colors = ButtonDefaults.textButtonColors(contentColor = cs.primary)
             ) { Text("Save") }

@@ -1,10 +1,13 @@
 package com.example.mavmart
 
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -124,13 +127,18 @@ private fun UsersTab(
     ) {
         items(users) { u ->
             ElevatedCard(
-                modifier = Modifier.clickable { onUserClick(u) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onUserClick(u) },
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = cs.primary,
                     contentColor   = cs.onPrimary
                 )
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)) {
                     Text(
                         "${u.first} ${u.last}",
                         style = MaterialTheme.typography.titleMedium,
@@ -157,12 +165,16 @@ private fun ListingsTab(
 ) {
     val cs = MaterialTheme.colorScheme
     LazyColumn(
-        Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(listings) { item ->
             ElevatedCard(
-                modifier = Modifier.clickable { onListingClick(item) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onListingClick(item) },
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = cs.primary,
                     contentColor   = cs.onPrimary
@@ -219,6 +231,23 @@ private fun ListingDetailDialog(
         title = { Text("Listing Details") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                // Photos
+                if (listing.photos.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(listing.photos) { uri ->
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(MaterialTheme.shapes.medium)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+
                 Text("Title: ${listing.title}")
                 Text("Price: ${formatCents(listing.priceCents)}")
                 Text("Category: ${listing.category.label}")
