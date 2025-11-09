@@ -2,7 +2,7 @@ package com.example.mavmart.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val BluePrimary = Color(0xFF1565C0)       // button blue
+val BluePrimary = Color(0xFF0A2647)      // button blue
 val OnPrimary   = Color(0xFFFFFFFF)       // button text white
 
 val BackgroundOrange = Color(0xFFFB8C00)  // app background orange

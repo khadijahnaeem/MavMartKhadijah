@@ -1,13 +1,15 @@
 package com.example.mavmart
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 
@@ -16,7 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 fun AdminDashboardScreen(
     onLogout: () -> Unit
 ) {
-    val brandPrimary = Color(0xFF0A2647)
+    val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
@@ -26,47 +28,94 @@ fun AdminDashboardScreen(
     var users by remember { mutableStateOf(emptyList<User>()) }
     var listings by remember { mutableStateOf(emptyList<Listing>()) }
 
-    LaunchedEffect(Unit) {
+    // detail state
+    var selectedUser by remember { mutableStateOf<User?>(null) }
+    var selectedListing by remember { mutableStateOf<Listing?>(null) }
+
+    fun refresh() {
         users = db.getAllUsers()
         listings = db.getAllListings()
     }
+    LaunchedEffect(Unit) { refresh() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Admin Dashboard", color = brandPrimary) },
-                actions = {
-                    TextButton(onClick = onLogout) { Text("Logout", color = brandPrimary) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                title = { Text("Admin Dashboard", color = cs.onBackground) },
+                actions = { TextButton(onClick = onLogout) { Text("Logout", color = cs.onBackground) } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background)
             )
         }
     ) { inner ->
         Column(
-            modifier = Modifier
+            Modifier
                 .padding(inner)
                 .fillMaxSize()
+                .background(cs.surface)
         ) {
-            TabRow(selectedTabIndex = tabIndex) {
+            TabRow(
+                selectedTabIndex = tabIndex,
+                containerColor = cs.background,
+                contentColor = cs.onBackground,
+                indicator = { pos ->
+                    TabRowDefaults.PrimaryIndicator(
+                        Modifier.tabIndicatorOffset(pos[tabIndex]),
+                        color = cs.primary
+                    )
+                },
+                divider = { HorizontalDivider(color = cs.outlineVariant) }
+            ) {
                 tabs.forEachIndexed { i, title ->
                     Tab(
                         selected = i == tabIndex,
                         onClick = { tabIndex = i },
+                        selectedContentColor = cs.primary,
+                        unselectedContentColor = cs.onSurface.copy(alpha = 0.7f),
                         text = { Text(title) }
                     )
                 }
             }
 
             when (tabIndex) {
-                0 -> UsersTab(users)
-                1 -> ListingsTab(listings)
+                0 -> UsersTab(users) { selectedUser = it }
+                1 -> ListingsTab(listings) { selectedListing = it }
             }
         }
     }
+
+    // USER dialog (toggle enable/disable)
+    selectedUser?.let { u ->
+        UserDetailDialog(
+            user = u,
+            onDismiss = { selectedUser = null },
+            onSaveEnabled = { enabled ->
+                db.setUserEnabled(u.id, enabled)
+                users = db.getAllUsers()
+                selectedUser = null
+            }
+        )
+    }
+
+    // LISTING dialog (show all info)
+    selectedListing?.let { item ->
+        ListingDetailDialog(
+            listing = item,
+            sellerName = remember(item.sellerId) {
+                db.getUserById(item.sellerId)?.let { "${it.first} ${it.last}" } ?: "Unknown"
+            },
+            onDismiss = { selectedListing = null }
+        )
+    }
 }
 
+/* ---------- tabs ---------- */
+
 @Composable
-private fun UsersTab(users: List<User>) {
+private fun UsersTab(
+    users: List<User>,
+    onUserClick: (User) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -74,26 +123,26 @@ private fun UsersTab(users: List<User>) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(users) { u ->
-            ElevatedCard {
+            ElevatedCard(
+                modifier = Modifier.clickable { onUserClick(u) },
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = cs.primary,
+                    contentColor   = cs.onPrimary
+                )
+            ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         "${u.first} ${u.last}",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.Black
+                        color = cs.onPrimary
                     )
                     Spacer(Modifier.height(4.dp))
+                    Text(u.email, color = cs.onPrimary)
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        text = u.email,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Black
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    AssistChip(
-                        onClick = {},
-                        label = { Text(u.role.name, color = Color.Black) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            labelColor = Color.Black
-                        )
+                        text = "${u.role.name} · ${if (u.enabled) "Enabled" else "Disabled"}",
+                        color = cs.onPrimary,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -102,45 +151,89 @@ private fun UsersTab(users: List<User>) {
 }
 
 @Composable
-private fun ListingsTab(listings: List<Listing>) {
+private fun ListingsTab(
+    listings: List<Listing>,
+    onListingClick: (Listing) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(listings) { item ->
-            ElevatedCard {
+            ElevatedCard(
+                modifier = Modifier.clickable { onListingClick(item) },
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = cs.primary,
+                    contentColor   = cs.onPrimary
+                )
+            ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(item.title, style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                    Text(item.title, style = MaterialTheme.typography.titleMedium, color = cs.onPrimary)
                     Spacer(Modifier.height(6.dp))
-                    Text(
-                        formatCents(item.priceCents),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color(0xFF0A2647)
-                    )
-                    item.description?.let { desc ->
-                        Spacer(Modifier.height(6.dp))
-                        Text(desc, style = MaterialTheme.typography.bodyMedium, color = Color.Black)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    InfoChipsRow(item)
+                    Text(formatCents(item.priceCents), color = cs.onPrimary)
                 }
             }
         }
     }
 }
 
+/* ---------- dialogs ---------- */
+
 @Composable
-private fun InfoChipsRow(item: Listing) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AssistChip(onClick = {}, label = { Text(item.categoryLabel(), color = Color.Black) })
-        AssistChip(onClick = {}, label = { Text(item.conditionLabel(), color = Color.Black) })
-        AssistChip(onClick = {}, label = { Text(item.status.name, color = Color.Black) })
-    }
+private fun UserDetailDialog(
+    user: User,
+    onDismiss: () -> Unit,
+    onSaveEnabled: (Boolean) -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    var enabled by remember { mutableStateOf(user.enabled) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { Button(onClick = { onSaveEnabled(enabled) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("User Details") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Name: ${user.first} ${user.last}")
+                Text("Email: ${user.email}")
+                Text("Role: ${user.role}")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (enabled) "Enabled" else "Disabled")
+                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+            }
+        }
+    )
 }
 
-/* Show labels added to enums */
+@Composable
+private fun ListingDetailDialog(
+    listing: Listing,
+    sellerName: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Listing Details") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Title: ${listing.title}")
+                Text("Price: ${formatCents(listing.priceCents)}")
+                Text("Category: ${listing.category.label}")
+                Text("Condition: ${listing.condition.label}")
+                Text("Status: ${listing.status}")
+                Text("Seller: $sellerName")
+                listing.description?.let { Text("Description: $it") }
+            }
+        }
+    )
+}
+
+/* -------------------- Helpers -------------------- */
+
 private fun Listing.categoryLabel(): String =
     when (category) {
         ListingCategory.GENERAL -> ListingCategory.GENERAL.label
@@ -158,7 +251,6 @@ private fun Listing.conditionLabel(): String =
         ItemCondition.POOR -> ItemCondition.POOR.label
     }
 
-/* Money formatter */
 private fun formatCents(cents: Int): String {
     val dollars = cents / 100
     val pennies = cents % 100

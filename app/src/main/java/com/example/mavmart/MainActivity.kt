@@ -5,6 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavType
@@ -18,15 +23,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MavMartTheme {
+            var isDark by rememberSaveable { mutableStateOf(false) }
+
+            MavMartTheme(darkTheme = isDark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFFF8F9FA) // background
+                    color = MaterialTheme.colorScheme.surface
                 ) {
                     val nav = rememberNavController()
 
                     NavHost(navController = nav, startDestination = "login") {
-
                         composable("login") {
                             LoginScreen(
                                 onUser = { nav.navigate("login/user") },
@@ -35,7 +41,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // User login -> navigate to Home with userId
                         composable("login/user") {
                             UserLoginScreen(
                                 onBack = { nav.popBackStack() },
@@ -48,7 +53,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Admin login -> admin dashboard
                         composable("login/admin") {
                             AdminLoginScreen(
                                 onBack = { nav.popBackStack() },
@@ -62,12 +66,9 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("register") {
-                            RegisterScreen(
-                                onBack = { nav.popBackStack() }
-                            )
+                            RegisterScreen(onBack = { nav.popBackStack() })
                         }
 
-                        // HOME with userId argument
                         composable(
                             route = "home/{userId}",
                             arguments = listOf(navArgument("userId") { type = NavType.LongType })
@@ -81,8 +82,10 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
-                                // pass userId & listingId to details
-                                onOpenListing = { listingId -> nav.navigate("listing/$userId/$listingId") }
+                                onOpenListing = { listingId -> nav.navigate("listing/$userId/$listingId") },
+                                // THEME PROPS — put them INSIDE the call
+                                isDark = isDark,
+                                onToggleTheme = { isDark = !isDark }
                             )
                         }
 
@@ -97,7 +100,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Details route expects both userId and listingId
                         composable(
                             route = "listing/{userId}/{listingId}",
                             arguments = listOf(

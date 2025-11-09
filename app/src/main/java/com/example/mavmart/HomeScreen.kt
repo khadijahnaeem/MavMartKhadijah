@@ -11,11 +11,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.*
-import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -53,7 +56,7 @@ private object CartRepository {
         if (existing != null) {
             existing.quantity += qty.coerceAtLeast(1)
             val idx = cart.indexOf(existing)
-            if (idx >= 0) cart[idx] = cart[idx] // nudge for recomposition
+            if (idx >= 0) cart[idx] = cart[idx] // nudge recomposition
         } else {
             cart.add(
                 CartItem(
@@ -96,10 +99,14 @@ private object CartRepository {
 fun HomeScreen(
     currentUserId: Long,
     onLogout: () -> Unit,
-    onOpenListing: (Long) -> Unit
+    onOpenListing: (Long) -> Unit,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit
 ) {
-    val brandPrimary = Color(0xFF0A2647)
-    val background   = Color(0xFFF8F9FA)
+    val cs = MaterialTheme.colorScheme
+    val brandPrimary = cs.primary
+    val background = cs.surface
+    val onBackground = cs.onSurface
 
     var tab by remember { mutableStateOf(HomeTab.Listings) }
     var showCreate by remember { mutableStateOf(false) }
@@ -109,11 +116,9 @@ fun HomeScreen(
 
     var items by remember { mutableStateOf(emptyList<Listing>()) }
 
-    // Snackbar host + scope for "Added to cart"
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Load listings for the active tab
     LaunchedEffect(tab, currentUserId) {
         items = when (tab) {
             HomeTab.Listings   -> db.getAllListings()
@@ -137,12 +142,28 @@ fun HomeScreen(
                     )
                 },
                 actions = {
-                    // Only show logout button on profile screen
                     if (tab == HomeTab.Profile) {
+                        // THEME TOGGLE placed between “Profile” (title) and “Logout”
+                        TextButton(
+                            onClick = onToggleTheme,
+                            colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+                        ) {
+                            Icon(
+                                imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                                contentDescription = if (isDark) "Switch to light" else "Switch to dark"
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isDark) "Light Mode" else "Dark Mode")
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
                         TextButton(
                             onClick = onLogout,
                             colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
-                        ) { Text("Logout") }
+                        ) {
+                            Text("Logout")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -150,7 +171,7 @@ fun HomeScreen(
         },
         bottomBar = {
             Box {
-                NavigationBar(containerColor = Color.White) {
+                NavigationBar(containerColor = cs.surface) {
                     NavigationBarItem(
                         selected = tab == HomeTab.Listings,
                         onClick = { tab = HomeTab.Listings },
@@ -201,14 +222,14 @@ fun HomeScreen(
                         onClick = { showCreate = true },
                         modifier = Modifier.align(Alignment.TopCenter),
                         containerColor = brandPrimary,
-                        contentColor = Color.White
+                        contentColor = cs.onPrimary
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = "Create Listing")
                     }
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) } // <-- SHOW SNACKBARS
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { inner ->
         Box(
             Modifier
@@ -238,7 +259,13 @@ fun HomeScreen(
                         onOpenListing = onOpenListing
                     )
                 }
-                HomeTab.Profile -> ProfileScreen(currentUserId, brandPrimary, background)
+                HomeTab.Profile -> ProfileScreen(
+                    currentUserId = currentUserId,
+                    brandPrimary = brandPrimary,
+                    background = background,
+                    isDark = isDark,
+                    onToggleTheme = onToggleTheme
+                )
                 HomeTab.Cart -> {
                     CartScreen(
                         currentUserId = currentUserId,
@@ -284,9 +311,16 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(currentUserId: Long, brandPrimary: Color = Color(0xFF0A2647), background: Color = Color(0xFFF8F9FA)) {
+fun ProfileScreen(
+    currentUserId: Long,
+    brandPrimary: Color = MaterialTheme.colorScheme.primary,
+    background: Color = MaterialTheme.colorScheme.surface,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit
+) {
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
+    val cs = MaterialTheme.colorScheme
 
     var user by remember { mutableStateOf<User?>(null) }
     var showEdit by remember { mutableStateOf(false) }
@@ -295,35 +329,33 @@ fun ProfileScreen(currentUserId: Long, brandPrimary: Color = Color(0xFF0A2647), 
         user = db.getUserById(currentUserId)
     }
 
-    Scaffold { inner ->
-        Box(
-            modifier = Modifier
-                .padding(inner)
-                .fillMaxSize()
-                .background(background)
-                .padding(20.dp)
-        ) {
-            if (user == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("User not found", color = Color.Black)
-                }
-            } else {
-                val u = user!!
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("USER ID: ${u.id}",  color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                    Text("NAME: ${u.first} ${u.last}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                    Text("EMAIL: ${u.email}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
-                    Text("ROLE: ${u.role.name}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(background)
+            .padding(20.dp)
+    ) {
+        if (user == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("User not found", color = cs.onSurface)
+            }
+        } else {
+            val u = user!!
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("USER ID: ${u.id}",  color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                Text("NAME: ${u.first} ${u.last}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                Text("EMAIL: ${u.email}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
+                Text("ROLE: ${u.role.name}", color = brandPrimary, style = MaterialTheme.typography.titleMedium)
 
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = { showEdit = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
-                    ) {
-                        Text("EDIT PROFILE")
-                    }
-                }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = { showEdit = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = brandPrimary,
+                        contentColor = cs.onPrimary
+                    )
+                ) { Text("EDIT PROFILE") }
             }
         }
     }
@@ -350,6 +382,7 @@ private fun EditProfileDialog(
     onSave: (User) -> Unit,
     brandPrimary: Color = Color(0xFF0A2647)
 ) {
+    val cs = MaterialTheme.colorScheme
     var first by remember { mutableStateOf(user.first) }
     var last by remember { mutableStateOf(user.last) }
     var email by remember { mutableStateOf(user.email) }
@@ -363,7 +396,7 @@ private fun EditProfileDialog(
                 OutlinedTextField(
                     value = first, onValueChange = { first = it },
                     label = { Text("First name") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -374,7 +407,7 @@ private fun EditProfileDialog(
                 OutlinedTextField(
                     value = last, onValueChange = { last = it },
                     label = { Text("Last name") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -385,7 +418,7 @@ private fun EditProfileDialog(
                 OutlinedTextField(
                     value = email, onValueChange = { email = it },
                     label = { Text("Email") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -396,7 +429,7 @@ private fun EditProfileDialog(
                 OutlinedTextField(
                     value = password, onValueChange = { password = it },
                     label = { Text("Password") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -440,9 +473,11 @@ private fun ListingsFeed(
     onAddToCart: (Listing) -> Unit,
     onOpenListing: (Long) -> Unit
 ) {
+    val cs = MaterialTheme.colorScheme
+
     if (listings.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No listings yet.", color = Color.Black)
+            Text("No listings yet.", color = cs.onSurface)
         }
     } else {
         LazyColumn(
@@ -457,7 +492,7 @@ private fun ListingsFeed(
                         .fillMaxWidth()
                         .heightIn(min = 110.dp)
                         .clickable { onOpenListing(item.id) },
-                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                    colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
                     shape = MaterialTheme.shapes.medium
                 ) {
@@ -470,7 +505,7 @@ private fun ListingsFeed(
 
                         item.description?.takeIf { it.isNotBlank() }?.let {
                             Spacer(Modifier.height(6.dp))
-                            Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.Black)
+                            Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -491,7 +526,7 @@ private fun ListingsFeed(
                                     onClick = { onAddToCart(item) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = brandPrimary,
-                                        contentColor = Color.White
+                                        contentColor = cs.onPrimary
                                     )
                                 ) {
                                     Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
@@ -515,7 +550,7 @@ fun ListingDetailsScreen(
     listingId: Long,
     onBack: () -> Unit
 ) {
-    val brandPrimary = Color(0xFF0A2647)
+    val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
@@ -523,24 +558,26 @@ fun ListingDetailsScreen(
     val scope = rememberCoroutineScope()
 
     var listing by remember { mutableStateOf<Listing?>(null) }
-    var seller  by remember { mutableStateOf<User?>(null) }
+    var seller by remember { mutableStateOf<User?>(null) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(listingId) {
         val l = db.getListingById(listingId)
         listing = l
-        seller  = l?.let { db.getUserById(it.sellerId) }
+        seller = l?.let { db.getUserById(it.sellerId) }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Listing Details", color = brandPrimary) },
+                title = { Text("Listing Details", color = cs.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = brandPrimary
+                            tint = cs.onBackground
                         )
                     }
                 },
@@ -550,19 +587,54 @@ fun ListingDetailsScreen(
         bottomBar = {
             val l = listing
             if (l != null) {
-                Button(
-                    onClick = {
-                        CartRepository.add(currentUserId, l, 1)
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Added to cart", withDismissAction = true)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .navigationBarsPadding(),
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("Add to cart") }
+                val isOwner = l.sellerId == currentUserId
+                if (isOwner) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .navigationBarsPadding(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = cs.primary,
+                                contentColor = cs.onPrimary
+                            )
+                        ) { Text("DELETE LISTING") }
+
+                        Button(
+                            onClick = { showEditDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = cs.primary,
+                                contentColor = cs.onPrimary
+                            )
+                        ) { Text("EDIT LISTING") }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            CartRepository.add(currentUserId, l, 1)
+                            scope.launch { snackbarHostState.showSnackbar("Added to cart", withDismissAction = true) }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .navigationBarsPadding(),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = cs.primary,
+                            contentColor = cs.onPrimary
+                        )
+                    ) {
+                        Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ADD TO CART")
+                    }
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -580,7 +652,6 @@ fun ListingDetailsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Photos
                 if (l.photos.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(l.photos.size) { i ->
@@ -595,25 +666,57 @@ fun ListingDetailsScreen(
                     }
                 }
 
-                // Title and price
-                Text(l.title, style = MaterialTheme.typography.headlineSmall, color = Color.Black)
-                Text(formatCents(l.priceCents), style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                Text(l.title, style = MaterialTheme.typography.headlineSmall, color = cs.onBackground)
+                Text(formatCents(l.priceCents), style = MaterialTheme.typography.titleMedium, color = cs.onBackground)
 
-                // Category and condition
-                Text("Category: ${l.category.label}", color = Color.Black)
-                Text("Condition: ${l.condition.label}", color = Color.Black)
+                Text("Category: ${l.category.label}", color = cs.onBackground)
+                Text("Condition: ${l.condition.label}", color = cs.onBackground)
 
-                // Seller
                 val sellerName = seller?.let { "${it.first} ${it.last}" } ?: "Unknown"
-                Text("Seller: $sellerName", color = Color.Black)
+                Text("Seller: $sellerName", color = cs.onBackground)
 
-                // Description
                 l.description?.takeIf { it.isNotBlank() }?.let {
-                    Divider()
-                    Text(it, style = MaterialTheme.typography.bodyLarge, color = Color.Black)
+                    HorizontalDivider()
+                    Text(it, style = MaterialTheme.typography.bodyLarge, color = cs.onBackground)
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete listing?", color = cs.onSurface) },
+            text = { Text("This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        listing?.let { db.deleteListing(it.id) }
+                        showDeleteConfirm = false
+                        onBack()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = cs.onSurface)
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = cs.onSurface)
+                ) { Text("Cancel") }
+            }
+        )
+    }
+    if (showEditDialog && listing != null) {
+        EditListingDialog(
+            listing = listing!!,
+            onDismiss = { showEditDialog = false },
+            onSave = { updated ->
+                db.updateListing(updated)
+                listing = db.getListingById(updated.id)
+                showEditDialog = false
+                scope.launch { snackbarHostState.showSnackbar("Listing updated", withDismissAction = true) }
+            }
+        )
     }
 }
 
@@ -625,12 +728,15 @@ private fun CartScreen(
     brandPrimary: Color = Color(0xFF0A2647),
     background: Color = Color(0xFFF8F9FA)
 ) {
+    val cs = MaterialTheme.colorScheme
     val cartItems = remember(currentUserId) { CartRepository.getItems(currentUserId) }
-    val totalCents = cartItems.sumOf { it.listing.priceCents * it.quantity }
+    val totalCents by remember(cartItems) {
+        derivedStateOf { CartRepository.totalCents(currentUserId) }
+    }
 
     if (cartItems.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Your cart is empty.", color = Color.Black)
+            Text("Your cart is empty.", color = cs.onSurface)
         }
         return
     }
@@ -638,7 +744,7 @@ private fun CartScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(background)
+            .background(cs.surface)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -648,7 +754,7 @@ private fun CartScreen(
         ) {
             items(cartItems, key = { it.id }) { cartItem ->
                 ElevatedCard(
-                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                    colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
                     shape = MaterialTheme.shapes.medium
                 ) {
@@ -661,7 +767,7 @@ private fun CartScreen(
                         Column(Modifier.weight(1f)) {
                             Text(cartItem.listing.title, style = MaterialTheme.typography.titleMedium, color = brandPrimary)
                             Spacer(Modifier.height(4.dp))
-                            Text(formatCents(cartItem.listing.priceCents), color = Color.Black)
+                            Text(formatCents(cartItem.listing.priceCents), color = cs.onSurface)
                         }
 
                         Row(
@@ -677,14 +783,14 @@ private fun CartScreen(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = brandPrimary)
                             ) { Text("-") }
 
-                            Text("${cartItem.quantity}", color = Color.Black, style = MaterialTheme.typography.titleSmall)
+                            Text("${cartItem.quantity}", color = cs.onSurface, style = MaterialTheme.typography.titleSmall)
 
                             Button(
                                 onClick = {
                                     CartRepository.updateQuantity(currentUserId, cartItem.id, cartItem.quantity + 1)
                                 },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = cs.onPrimary)
                             ) { Text("+") }
 
                             IconButton(
@@ -701,7 +807,7 @@ private fun CartScreen(
         Surface(
             tonalElevation = 3.dp,
             shadowElevation = 3.dp,
-            color = Color.White
+            color = cs.surface
         ) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(
@@ -724,11 +830,10 @@ private fun CartScreen(
 
                     Button(
                         onClick = {
-                            // Placeholder checkout action.
                             CartRepository.clear(currentUserId)
                         },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = cs.onPrimary)
                     ) { Text("CHECK OUT") }
                 }
             }
@@ -736,7 +841,7 @@ private fun CartScreen(
     }
 }
 
-/* ================== Create listing dialog + pickers ================== */
+/* ================== Create/Edit listing dialog + pickers ================== */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -751,6 +856,7 @@ private fun AddListingDialog(
     ) -> Unit,
     brandPrimary: Color = Color(0xFF0A2647)
 ) {
+    val cs = MaterialTheme.colorScheme
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
@@ -766,7 +872,7 @@ private fun AddListingDialog(
                 OutlinedTextField(
                     value = title, onValueChange = { title = it },
                     label = { Text("Title") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -777,7 +883,7 @@ private fun AddListingDialog(
                 OutlinedTextField(
                     value = description, onValueChange = { description = it },
                     label = { Text("Description (optional)") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = brandPrimary,
@@ -792,7 +898,7 @@ private fun AddListingDialog(
                 OutlinedTextField(
                     value = price, onValueChange = { price = it },
                     label = { Text("Price (e.g., 12.34)") },
-                    textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -822,7 +928,100 @@ private fun AddListingDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -> Unit, brandPrimary: Color = Color(0xFF0A2647)) {
+private fun EditListingDialog(
+    listing: Listing,
+    onDismiss: () -> Unit,
+    onSave: (Listing) -> Unit,
+    brandPrimary: Color = Color(0xFF0A2647)
+) {
+    val cs = MaterialTheme.colorScheme
+    var title by remember { mutableStateOf(listing.title) }
+    var description by remember { mutableStateOf(listing.description ?: "") }
+    var category by remember { mutableStateOf(listing.category) }
+    var condition by remember { mutableStateOf(listing.condition) }
+    var price by remember { mutableStateOf((listing.priceCents / 100.0).toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit listing", color = brandPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title, onValueChange = { title = it },
+                    label = { Text("Title") },
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
+                )
+                OutlinedTextField(
+                    value = description, onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
+                )
+
+                CategoryPicker(value = category, onChange = { category = it }, brandPrimary = brandPrimary)
+                ConditionPicker(value = condition, onChange = { condition = it }, brandPrimary = brandPrimary)
+
+                OutlinedTextField(
+                    value = price, onValueChange = { price = it },
+                    label = { Text("Price (e.g., 12.34)") },
+                    textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = brandPrimary,
+                        focusedLabelColor = brandPrimary,
+                        unfocusedBorderColor = Color.LightGray
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val cents = (price.toDoubleOrNull()?.times(100))?.toInt() ?: listing.priceCents
+                    onSave(
+                        listing.copy(
+                            title = title.trim(),
+                            description = description.ifBlank { null },
+                            category = category,
+                            condition = condition,
+                            priceCents = cents
+                        )
+                    )
+                },
+                enabled = title.isNotBlank() && price.isNotBlank(),
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = brandPrimary)
+            ) { Text("Cancel") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryPicker(
+    value: ListingCategory,
+    onChange: (ListingCategory) -> Unit,
+    brandPrimary: Color = Color(0xFF0A2647)
+) {
+    val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
@@ -830,10 +1029,10 @@ private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -
             onValueChange = {},
             readOnly = true,
             label = { Text("Category") },
-            textStyle = LocalTextStyle.current.copy(color = Color.Black),
+            textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
                 .fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = brandPrimary,
@@ -842,9 +1041,9 @@ private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -
             )
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ListingCategory.entries.forEach  { opt ->
+            ListingCategory.entries.forEach { opt ->
                 DropdownMenuItem(
-                    text = { Text(opt.label, color = Color.Black) },
+                    text = { Text(opt.label, color = cs.onSurface) },
                     onClick = { onChange(opt); expanded = false }
                 )
             }
@@ -854,7 +1053,12 @@ private fun CategoryPicker(value: ListingCategory, onChange: (ListingCategory) -
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> Unit, brandPrimary: Color = Color(0xFF0A2647)) {
+private fun ConditionPicker(
+    value: ItemCondition,
+    onChange: (ItemCondition) -> Unit,
+    brandPrimary: Color = Color(0xFF0A2647)
+) {
+    val cs = MaterialTheme.colorScheme
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
         OutlinedTextField(
@@ -862,10 +1066,10 @@ private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> U
             onValueChange = {},
             readOnly = true,
             label = { Text("Condition") },
-            textStyle = LocalTextStyle.current.copy(color = Color.Black),
+            textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
                 .fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = brandPrimary,
@@ -876,7 +1080,7 @@ private fun ConditionPicker(value: ItemCondition, onChange: (ItemCondition) -> U
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ItemCondition.entries.forEach { opt ->
                 DropdownMenuItem(
-                    text = { Text(opt.label, color = Color.Black) },
+                    text = { Text(opt.label, color = cs.onSurface) },
                     onClick = { onChange(opt); expanded = false }
                 )
             }

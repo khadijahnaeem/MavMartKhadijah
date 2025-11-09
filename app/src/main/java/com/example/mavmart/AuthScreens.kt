@@ -13,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -34,19 +33,23 @@ fun LoginScreen(
     onRegister: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val brandPrimary = Color(0xFF0A2647)
-    val brandAccent  = Color(0xFFFFF3D9)
-    val brandOrange  = Color(0xFFFF8C00)
-    val background   = Color(0xFFF8F9FA)
+    val cs = MaterialTheme.colorScheme
 
-    Surface(modifier = modifier.fillMaxSize(), color = background, contentColor = brandPrimary) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = cs.surface,            // page: white (light) / black (dark)
+        contentColor = cs.onSurface
+    ) {
+        Column(Modifier.fillMaxSize()) {
+
+            // Banner: orange (light) / navy (dark)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(170.dp),
                 shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                color = brandOrange
+                color = cs.background,
+                contentColor = cs.onBackground
             ) {
                 Row(
                     modifier = Modifier
@@ -54,16 +57,11 @@ fun LoginScreen(
                         .padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // USE THE LOGO HERE
-                    LogoImage(
-                        message = "hi",
-                        from = "login-banner",
-                        modifier = Modifier.size(52.dp)
-                    )
+                    LogoImage(Modifier.size(52.dp))
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        Text("Choose how you want to sign in", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
+                        Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Choose how you want to sign in", fontSize = 14.sp)
                     }
                 }
             }
@@ -75,7 +73,7 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
+                colors = CardDefaults.elevatedCardColors(containerColor = cs.surface)
             ) {
                 Column(
                     modifier = Modifier
@@ -89,7 +87,10 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .heightIn(min = 48.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = cs.primary,   // navy (light) / orange (dark)
+                            contentColor = cs.onPrimary
+                        )
                     ) { Text("Login as User", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
 
                     Spacer(Modifier.height(12.dp))
@@ -100,39 +101,51 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .heightIn(min = 48.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = cs.primary,
+                            contentColor = cs.onPrimary
+                        )
                     ) { Text("Login as Admin", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
                 }
             }
 
             Spacer(Modifier.weight(1f))
 
-            Button(
-                onClick = onRegister,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp)
-                    .heightIn(min = 48.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8C00), contentColor = Color.White)
-            ) { Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+            Surface(color = cs.background) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Button(
+                        onClick = onRegister,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = cs.primary,      // navy (light) / orange (dark)
+                            contentColor = cs.onPrimary,
+                            disabledContainerColor = cs.primary.copy(alpha = .30f),
+                            disabledContentColor = cs.onPrimary.copy(alpha = .65f)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                    ) { Text("Register", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                }
+            }
         }
     }
 }
 
-// logo composable
 @Composable
-fun LogoImage(message: String, from: String, modifier: Modifier = Modifier) {
-    val image = painterResource(R.drawable.logo_1)
+fun LogoImage(modifier: Modifier = Modifier, contentDescription: String? = null) {
     Image(
-        painter = image,
-        contentDescription = null,
+        painter = painterResource(R.drawable.logo_1),
+        contentDescription = contentDescription,
         modifier = modifier
     )
 }
 
-/* Keep last email typed so we can fetch the user object on success */
+/* Keep last email typed so we can fetch the user on success */
 private var RoleLoginForm_lastEmail: String? = null
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -144,16 +157,13 @@ private fun RoleLoginForm(
     authenticate: (email: String, password: String) -> Boolean,
     onSuccess: () -> Unit
 ) {
+    val cs = MaterialTheme.colorScheme
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPass by remember { mutableStateOf(false) }
 
-    val brandPrimary = Color(0xFF0A2647)
-    val brandAccent  = Color(0xFFFFF3D9)
-    val brandOrange  = Color(0xFFFF8C00)
-    val background   = Color(0xFFF8F9FA)
-
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -164,81 +174,77 @@ private fun RoleLoginForm(
                         title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = brandPrimary,
+                        color = cs.onPrimary,
                         fontWeight = FontWeight.Medium
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = brandPrimary)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = cs.onPrimary
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.primary)
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            Surface(tonalElevation = 1.dp, shadowElevation = 2.dp, color = Color.Transparent) {
-                Column(
-                    modifier = Modifier
+            // Orange banner with navy Login button – same pattern as Register
+            Surface(color = cs.background) {
+                Box(
+                    Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .imePadding()
-                        .padding(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Button(
                         onClick = {
                             val msg = validateEmail?.invoke(email)
                             if (msg != null) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = msg,
-                                        actionLabel = "Dismiss",
-                                        withDismissAction = true,
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
+                                scope.launch { snack.showSnackbar(msg, withDismissAction = true) }
+                            } else if (authenticate(email.trim().lowercase(), password)) {
+                                onSuccess()
                             } else {
-                                val ok = authenticate(email.trim().lowercase(), password)
-                                if (ok) {
-                                    onSuccess()
-                                } else {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Invalid email or password.",
-                                            actionLabel = "Dismiss",
-                                            withDismissAction = true,
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    }
+                                scope.launch {
+                                    snack.showSnackbar("Invalid email or password.", withDismissAction = true)
                                 }
                             }
                         },
                         enabled = email.isNotBlank() && password.isNotBlank(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = cs.primary,
+                            contentColor   = cs.onPrimary,
+                            disabledContainerColor = cs.primary.copy(alpha = .30f),
+                            disabledContentColor   = cs.onPrimary.copy(alpha = .65f)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                     ) { Text("Login", fontSize = 16.sp, fontWeight = FontWeight.Medium) }
                 }
             }
         }
+
+
     ) { inner ->
         Column(
             modifier = Modifier
                 .padding(inner)
                 .fillMaxSize()
-                .background(background)
+                .background(cs.surface)  // page: white / black
         ) {
-            // Banner
+            // Banner: orange / navy
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(170.dp),
                 shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                color = brandPrimary
+                color = cs.background,
+                contentColor = cs.onBackground
             ) {
                 Row(
                     modifier = Modifier
@@ -246,14 +252,9 @@ private fun RoleLoginForm(
                         .padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // USE THE LOGO HERE
-                    LogoImage(
-                        message = "hi",
-                        from = "role-login",
-                        modifier = Modifier.size(52.dp)
-                    )
+                    LogoImage(Modifier.size(52.dp))
                     Spacer(Modifier.width(14.dp))
-                    Column { Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                    Column { Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
 
@@ -264,17 +265,20 @@ private fun RoleLoginForm(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     Text(
                         text = "Welcome back",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.15.sp
                         ),
-                        color = brandPrimary
+                        color = cs.onSurface
                     )
 
                     OutlinedTextField(
@@ -287,12 +291,12 @@ private fun RoleLoginForm(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
 
@@ -301,7 +305,6 @@ private fun RoleLoginForm(
                         onValueChange = { password = it },
                         label = { Text("Password") },
                         singleLine = true,
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
                         visualTransformation = if (showPass) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
@@ -309,16 +312,17 @@ private fun RoleLoginForm(
                                 Icon(
                                     imageVector = if (showPass) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                                     contentDescription = if (showPass) "Hide password" else "Show password",
-                                    tint = brandPrimary
+                                    tint = cs.primary
                                 )
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
                 }
@@ -362,7 +366,6 @@ fun AdminLoginScreen(
     RoleLoginForm(
         title = "Admin Login",
         onBack = onBack,
-        // Only rule: must end with @mavmart.com (any password is fine)
         validateEmail = { raw ->
             val e = raw.trim().lowercase()
             if (e.endsWith("@mavmart.com")) null else "Admin email should end with @mavmart.com"
@@ -379,11 +382,7 @@ fun AdminLoginScreen(
 fun RegisterScreen(
     onBack: () -> Unit
 ) {
-    val brandPrimary = Color(0xFF0A2647)
-    val brandAccent  = Color(0xFFFFF3D9)
-    val brandOrange  = Color(0xFFFF8C00)
-    val background   = Color(0xFFF8F9FA)
-
+    val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
     val db = remember { AppDatabase.get(context) }
 
@@ -395,16 +394,21 @@ fun RegisterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Register", color = brandPrimary) },
+                title = { Text("Register", color = cs.onPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = brandPrimary)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = cs.onPrimary
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.primary)
             )
         },
         bottomBar = {
+            // Sticky bar: orange (light) / navy (dark), white text for readability
             Button(
                 onClick = {
                     val user = User(
@@ -425,7 +429,10 @@ fun RegisterScreen(
                     .padding(16.dp)
                     .navigationBarsPadding(),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = brandPrimary, contentColor = Color.White)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = cs.primary,
+                    contentColor = cs.onPrimary
+                )
             ) { Text("Create Account") }
         }
     ) { inner ->
@@ -433,15 +440,16 @@ fun RegisterScreen(
             modifier = Modifier
                 .padding(inner)
                 .fillMaxSize()
-                .background(background)
+                .background(cs.surface)
         ) {
-            // Banner (same vibe as login)
+            // Banner block (orange / navy)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(170.dp),
                 shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp),
-                color = brandPrimary
+                color = cs.background,
+                contentColor = MaterialTheme.colorScheme.onBackground
             ) {
                 Row(
                     modifier = Modifier
@@ -449,26 +457,20 @@ fun RegisterScreen(
                         .padding(horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // USE THE LOGO HERE
-                    LogoImage(
-                        message = "hi",
-                        from = "register-banner",
-                        modifier = Modifier.size(52.dp)
-                    )
+                    LogoImage(Modifier.size(52.dp))
                     Spacer(Modifier.width(14.dp))
-                    Column { Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                    Column { Text("MavMart", fontSize = 26.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Card (mirrors login)
             ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                colors = CardDefaults.elevatedCardColors(containerColor = cs.surface),
                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
             ) {
                 Column(
@@ -483,56 +485,60 @@ fun RegisterScreen(
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.15.sp
                         ),
-                        color = brandPrimary
+                        color = cs.primary
                     )
 
                     OutlinedTextField(
                         value = first, onValueChange = { first = it },
-                        label = { Text("First Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        label = { Text("First Name") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
 
                     OutlinedTextField(
                         value = last, onValueChange = { last = it },
-                        label = { Text("Last Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
+                        label = { Text("Last Name") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
 
                     OutlinedTextField(
                         value = email, onValueChange = { email = it },
-                        label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Email") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
 
                     OutlinedTextField(
                         value = password, onValueChange = { password = it },
-                        label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Password") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        textStyle = LocalTextStyle.current.copy(color = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = brandPrimary,
-                            focusedLabelColor = brandPrimary,
-                            unfocusedBorderColor = Color.LightGray
+                            focusedBorderColor = cs.primary,
+                            focusedLabelColor = cs.primary,
+                            unfocusedBorderColor = cs.outline,
+                            cursorColor = cs.primary
                         )
                     )
                 }

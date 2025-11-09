@@ -6,10 +6,6 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 
-/**
- * Single-source-of-truth for schema + queries.
- * Db constants (name, version, tables, columns, CREATE SQL) are embedded below.
- */
 class AppDatabase private constructor(ctx: Context) :
     SQLiteOpenHelper(ctx, Db.DB_NAME, null, Db.DB_VERSION) {
 
@@ -35,11 +31,18 @@ class AppDatabase private constructor(ctx: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // DEMO policy: destructive migration for any schema prior to v6
+        // Your old policy: destructive for anything before 6
         if (oldVersion < 6) {
             db.execSQL("DROP TABLE IF EXISTS ${Db.Listings.TABLE}")
             db.execSQL("DROP TABLE IF EXISTS ${Db.Users.TABLE}")
             onCreate(db)
+            return
+        }
+        // v6 -> v7: add enabled column to users
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE ${Db.Users.TABLE} ADD COLUMN ${Db.Users.COL_ENABLED} INTEGER NOT NULL DEFAULT 1")
+            // ensure no nulls even if ALTER didn't apply default (some sqlite builds)
+            db.execSQL("UPDATE ${Db.Users.TABLE} SET ${Db.Users.COL_ENABLED}=1 WHERE ${Db.Users.COL_ENABLED} IS NULL")
         }
     }
 
@@ -52,6 +55,7 @@ class AppDatabase private constructor(ctx: Context) :
             put(Db.Users.COL_EMAIL, user.email)
             put(Db.Users.COL_PASSWORD, user.password)
             put(Db.Users.COL_ROLE, user.role.name)
+            put(Db.Users.COL_ENABLED, if (user.enabled) 1 else 0)
         }
         return writableDatabase.insert(Db.Users.TABLE, null, cv)
     }
@@ -66,7 +70,8 @@ class AppDatabase private constructor(ctx: Context) :
                 Db.Users.COL_LAST,
                 Db.Users.COL_EMAIL,
                 Db.Users.COL_PASSWORD,
-                Db.Users.COL_ROLE
+                Db.Users.COL_ROLE,
+                Db.Users.COL_ENABLED
             ),
             null, null, null, null,
             "${Db.Users.COL_FIRST} COLLATE NOCASE ASC, ${Db.Users.COL_LAST} COLLATE NOCASE ASC"
@@ -79,7 +84,8 @@ class AppDatabase private constructor(ctx: Context) :
                     last = it.getString(2),
                     email = it.getString(3),
                     password = it.getString(4),
-                    role = Role.valueOf(it.getString(5))
+                    role = Role.valueOf(it.getString(5)),
+                    enabled = it.getInt(6) != 0
                 )
             }
         }
@@ -95,7 +101,8 @@ class AppDatabase private constructor(ctx: Context) :
                 Db.Users.COL_LAST,
                 Db.Users.COL_EMAIL,
                 Db.Users.COL_PASSWORD,
-                Db.Users.COL_ROLE
+                Db.Users.COL_ROLE,
+                Db.Users.COL_ENABLED
             ),
             "${Db.Users.COL_EMAIL}=?",
             arrayOf(email),
@@ -109,7 +116,8 @@ class AppDatabase private constructor(ctx: Context) :
                     last = it.getString(2),
                     email = it.getString(3),
                     password = it.getString(4),
-                    role = Role.valueOf(it.getString(5))
+                    role = Role.valueOf(it.getString(5)),
+                    enabled = it.getInt(6) != 0
                 )
             }
         }
@@ -125,7 +133,8 @@ class AppDatabase private constructor(ctx: Context) :
                 Db.Users.COL_LAST,
                 Db.Users.COL_EMAIL,
                 Db.Users.COL_PASSWORD,
-                Db.Users.COL_ROLE
+                Db.Users.COL_ROLE,
+                Db.Users.COL_ENABLED
             ),
             "${Db.Users.COL_ID}=?",
             arrayOf(id.toString()),
@@ -139,13 +148,14 @@ class AppDatabase private constructor(ctx: Context) :
                     last = it.getString(2),
                     email = it.getString(3),
                     password = it.getString(4),
-                    role = Role.valueOf(it.getString(5))
+                    role = Role.valueOf(it.getString(5)),
+                    enabled = it.getInt(6) != 0
                 )
             } else null
         }
     }
 
-    /** Update first/last/email/password */
+    /** Update all editable user fields, including enabled and role. */
     fun updateUser(u: User): Int {
         val values = ContentValues().apply {
             put(Db.Users.COL_FIRST, u.first)
@@ -153,6 +163,7 @@ class AppDatabase private constructor(ctx: Context) :
             put(Db.Users.COL_EMAIL, u.email)
             put(Db.Users.COL_PASSWORD, u.password)
             put(Db.Users.COL_ROLE, u.role.name)
+            put(Db.Users.COL_ENABLED, if (u.enabled) 1 else 0)
         }
         return writableDatabase.update(
             Db.Users.TABLE,
@@ -162,8 +173,22 @@ class AppDatabase private constructor(ctx: Context) :
         )
     }
 
+    /** Toggle only the enabled flag (used by Admin dialog). */
+    fun setUserEnabled(userId: Long, enabled: Boolean): Int {
+        val cv = ContentValues().apply {
+            put(Db.Users.COL_ENABLED, if (enabled) 1 else 0)
+        }
+        return writableDatabase.update(
+            Db.Users.TABLE,
+            cv,
+            "${Db.Users.COL_ID}=?",
+            arrayOf(userId.toString())
+        )
+    }
+
     fun validateLogin(email: String, password: String, expectedRole: Role? = null): User? {
         val u = findUserByEmail(email) ?: return null
+        if (!u.enabled) return null
         if (u.password != password) return null
         if (expectedRole != null && u.role != expectedRole) return null
         return u
@@ -308,15 +333,43 @@ class AppDatabase private constructor(ctx: Context) :
             } else null
         }
     }
+
+    fun updateListing(l: Listing): Int {
+        val cv = ContentValues().apply {
+            put(Db.Listings.COL_SELLER_ID, l.sellerId)
+            put(Db.Listings.COL_TITLE,     l.title)
+            put(Db.Listings.COL_DESC,      l.description)
+            put(Db.Listings.COL_CATEGORY,  l.category.name)
+            put(Db.Listings.COL_PRICE_CENTS, l.priceCents)
+            put(Db.Listings.COL_CONDITION, l.condition.name)
+            put(Db.Listings.COL_PHOTOS_JSON, JSONArray(l.photos).toString())
+            put(Db.Listings.COL_STATUS,    l.status.name)
+            // keep createdAt as-is
+        }
+        return writableDatabase.update(
+            Db.Listings.TABLE,
+            cv,
+            "${Db.Listings.COL_ID}=?",
+            arrayOf(l.id.toString())
+        )
+    }
+
+    fun deleteListing(id: Long): Int {
+        return writableDatabase.delete(
+            Db.Listings.TABLE,
+            "${Db.Listings.COL_ID}=?",
+            arrayOf(id.toString())
+        )
+    }
 }
 
 /* ===========================================================
- *  Internal DB schema (merged replacement for DbContract.kt)
+ *  Internal DB schema
  * ===========================================================
  */
 private object Db {
     const val DB_NAME = "mavmart.db"
-    const val DB_VERSION = 6
+    const val DB_VERSION = 7   // bumped
 
     object Users {
         const val TABLE = "users"
@@ -324,10 +377,10 @@ private object Db {
         const val COL_FIRST = "first"
         const val COL_LAST = "last"
         const val COL_EMAIL = "email"
-        const val COL_PASSWORD = "password" // plain text per demo
+        const val COL_PASSWORD = "password"
         const val COL_ROLE = "role"
+        const val COL_ENABLED = "enabled"   // NEW
 
-        // email unique; role stored as text ("User"/"Admin")
         val CREATE = """
             CREATE TABLE $TABLE (
                 $COL_ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -335,7 +388,8 @@ private object Db {
                 $COL_LAST  TEXT NOT NULL,
                 $COL_EMAIL TEXT NOT NULL UNIQUE,
                 $COL_PASSWORD TEXT NOT NULL,
-                $COL_ROLE TEXT NOT NULL
+                $COL_ROLE TEXT NOT NULL,
+                $COL_ENABLED INTEGER NOT NULL DEFAULT 1
             )
         """.trimIndent()
 
@@ -356,7 +410,6 @@ private object Db {
         const val COL_STATUS = "status"
         const val COL_CREATED_AT = "created_at"
 
-        // Foreign key to users(_id)
         val CREATE = """
             CREATE TABLE $TABLE (
                 $COL_ID INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -33,7 +33,8 @@ data class User(
     val last: String,
     val email: String,
     val password: String,
-    val role: Role = Role.User
+    val role: Role = Role.User,
+    val enabled: Boolean = true
 )
 
 data class Listing(
