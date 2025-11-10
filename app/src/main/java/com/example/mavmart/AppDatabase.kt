@@ -154,8 +154,6 @@ class AppDatabase private constructor(ctx: Context) :
             } else null
         }
     }
-
-    /** Update all editable user fields, including enabled and role. */
     fun updateUser(u: User): Int {
         val values = ContentValues().apply {
             put(Db.Users.COL_FIRST, u.first)
@@ -172,8 +170,6 @@ class AppDatabase private constructor(ctx: Context) :
             arrayOf(u.id.toString())
         )
     }
-
-    /** Toggle only the enabled flag (used by Admin dialog). */
     fun setUserEnabled(userId: Long, enabled: Boolean): Int {
         val cv = ContentValues().apply {
             put(Db.Users.COL_ENABLED, if (enabled) 1 else 0)
@@ -238,6 +234,46 @@ class AppDatabase private constructor(ctx: Context) :
             null, null, null, null,
             "${Db.Listings.COL_CREATED_AT} DESC"
         )
+        c.use {
+            while (it.moveToNext()) {
+                out += Listing(
+                    id = it.getLong(0),
+                    sellerId = it.getLong(1),
+                    title = it.getString(2),
+                    description = it.getString(3),
+                    category = ListingCategory.valueOf(it.getString(4)),
+                    priceCents = it.getInt(5),
+                    condition = ItemCondition.valueOf(it.getString(6)),
+                    photos = jsonToPhotos(it.getString(7)),
+                    status = ListingStatus.valueOf(it.getString(8)),
+                    createdAt = it.getLong(9)
+                )
+            }
+        }
+        return out
+    }
+// NEW
+    fun getAllListingsVisible(): List<Listing> {
+        val sql = """
+        SELECT l.${Db.Listings.COL_ID},
+               l.${Db.Listings.COL_SELLER_ID},
+               l.${Db.Listings.COL_TITLE},
+               l.${Db.Listings.COL_DESC},
+               l.${Db.Listings.COL_CATEGORY},
+               l.${Db.Listings.COL_PRICE_CENTS},
+               l.${Db.Listings.COL_CONDITION},
+               l.${Db.Listings.COL_PHOTOS_JSON},
+               l.${Db.Listings.COL_STATUS},
+               l.${Db.Listings.COL_CREATED_AT}
+        FROM ${Db.Listings.TABLE} l
+        JOIN ${Db.Users.TABLE} u
+          ON u.${Db.Users.COL_ID} = l.${Db.Listings.COL_SELLER_ID}
+        WHERE u.${Db.Users.COL_ENABLED} = 1
+        ORDER BY l.${Db.Listings.COL_CREATED_AT} DESC
+    """.trimIndent()
+
+        val out = mutableListOf<Listing>()
+        val c = readableDatabase.rawQuery(sql, null)
         c.use {
             while (it.moveToNext()) {
                 out += Listing(

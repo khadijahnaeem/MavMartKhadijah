@@ -123,7 +123,7 @@ fun HomeScreen(
 
     LaunchedEffect(tab, currentUserId) {
         items = when (tab) {
-            HomeTab.Listings   -> db.getAllListings()
+            HomeTab.Listings   -> db.getAllListingsVisible()
             HomeTab.MyListings -> db.getListingsForSeller(currentUserId)
             else               -> emptyList()
         }
@@ -301,7 +301,7 @@ fun HomeScreen(
                 items = if (tab == HomeTab.MyListings) {
                     db.getListingsForSeller(currentUserId)
                 } else {
-                    db.getAllListings()
+                    db.getAllListingsVisible()
                 }
                 showCreate = false
             }
@@ -755,6 +755,14 @@ fun ListingDetailsScreen(
         val l = db.getListingById(listingId)
         listing = l
         seller = l?.let { db.getUserById(it.sellerId) }
+    }
+
+    val sellerEnabled = seller?.enabled ?: true
+    if (!sellerEnabled) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("This listing is no longer available.")
+        }
+        return
     }
 
     Scaffold(
