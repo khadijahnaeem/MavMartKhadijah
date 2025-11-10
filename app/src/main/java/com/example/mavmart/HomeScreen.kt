@@ -60,7 +60,7 @@ private object CartRepository {
         if (existing != null) {
             existing.quantity += qty.coerceAtLeast(1)
             val idx = cart.indexOf(existing)
-            if (idx >= 0) cart[idx] = cart[idx] // nudge recomposition
+            if (idx >= 0) cart[idx] = cart[idx]
         } else {
             cart.add(
                 CartItem(
@@ -334,7 +334,7 @@ private fun SearchScreen(
     val categories = ListingCategory.entries
     var selectedCategories by remember { mutableStateOf(setOf<ListingCategory>()) }
 
-    // ----- Price bounds from items -----
+    // Price bounds from items
     val (minCents, maxCents) = remember(items) {
         val prices = items.map { it.priceCents }
         val min = prices.minOrNull() ?: 0
@@ -344,7 +344,7 @@ private fun SearchScreen(
     val safeMin = minCents
     val safeMax = if (maxCents <= minCents) minCents + 100 else maxCents
 
-    // Slider in dollars for UI, keep cents for filtering
+    // Slider in dollars
     val initialRange = remember(safeMin, safeMax) {
         (safeMin / 100f)..(safeMax / 100f)
     }
@@ -421,7 +421,6 @@ private fun SearchScreen(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // ----- Categories -----
                             Text("Filter by Category", color = cs.primary, style = MaterialTheme.typography.titleSmall)
                             categories.forEach { cat ->
                                 Row(
@@ -441,10 +440,9 @@ private fun SearchScreen(
 
                             HorizontalDivider()
 
-                            // ----- Price Range -----
+                            // Price Range
                             Text("Price Range", color = cs.primary, style = MaterialTheme.typography.titleSmall)
 
-                            // Labels row
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween

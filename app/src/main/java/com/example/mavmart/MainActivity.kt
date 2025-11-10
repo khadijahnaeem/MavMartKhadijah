@@ -82,7 +82,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onOpenListing = { listingId -> nav.navigate("listing/$userId/$listingId") },
-                                // THEME PROPS — put them INSIDE the call
                                 isDark = isDark,
                                 onToggleTheme = { isDark = !isDark }
                             )
